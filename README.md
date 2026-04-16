@@ -30,7 +30,7 @@ Alex proposed the field name:
 Rob confirmed:
 > "Sounds fine to me. Thank you"
 
-The field `ACQDISPSOURCE` is now included in the `ASSET_ACCOUNTING.LAND_ASSETS_EXPORT_VW` view (see `land_acq_source.sql`) and is planned for `TRN_STREET_ASSETS`.
+The field `ACQDISPSOURCE` has been added to `ASSET_ACCOUNTING.LND_LAND_ASSETS` as `nvarchar(20), null` and is included in the `ASSET_ACCOUNTING.LAND_ASSETS_EXPORT_VW` view (see `land_acq_source.sql`). Live data confirms it is populated with values such as `"Transaction Summary"` for land assets. The equivalent field still needs to be added to `ASSET_ACCOUNTING.TRN_STREET_ASSETS`.
 
 ---
 
@@ -73,9 +73,51 @@ hrm_riva_2.0/
 | `LND_HRM_PARCEL` | `SDEADM` | HRM parcel polygons |
 | `LND_HRM_PARCEL_HAS_ACQ_DISP` | `SDEADM` | Parcel → acquisition/disposal link |
 | `LND_ACQUISITION_DISPOSAL` | `SDEADM` | Acquisition/disposal records |
-| `TRN_STREET_ASSETS` | `ASSET_ACCOUNTING` | Asset accounting export for street assets |
-| `LND_LAND_ASSETS` | `ASSET_ACCOUNTING` | Asset accounting export for land assets |
+| `TRN_STREET_ASSETS` | `ASSET_ACCOUNTING` | Asset accounting export for street assets (see schema below) |
+| `LND_LAND_ASSETS` | `ASSET_ACCOUNTING` | Asset accounting export for land assets — `ACQDISPSOURCE` added ✓ |
 | `LAND_ASSETS_EXPORT_VW` | `ASSET_ACCOUNTING` | View over `LND_LAND_ASSETS` with `ACQDISPSOURCE` |
+
+### ASSET_ACCOUNTING.LND_LAND_ASSETS — Status
+
+`ACQDISPSOURCE (nvarchar(20), null)` has been added to this table. Field is live in PROD and populates with values such as `"Transaction Summary"` (derived from `LND_ACQUISITION_DISPOSAL`). NULL where no acquisition/disposal record exists for the parcel.
+
+### ASSET_ACCOUNTING.TRN_STREET_ASSETS — Schema
+
+| Column | Type |
+|---|---|
+| OBJECTID | int, not null |
+| STR_CODE | int, not null |
+| STR_NAME | nvarchar(40), not null |
+| STR_TYPE | nvarchar(4), not null |
+| GSA_NAME | nvarchar(40), not null |
+| FULL_NAME | nvarchar(40), not null |
+| STR_STATUS | nvarchar(4), not null |
+| OWN | nvarchar(4), not null |
+| DATE_ACCEPT | datetime2(7), null |
+| PST_CLASS | nvarchar(40), null |
+| SOURCE | nvarchar(12), null |
+| FDMID | int, not null |
+| FROM_STREET | int, null |
+| TO_STREET | int, null |
+| SHAPE_LENGTH | numeric(38,8), null |
+| SHORT_DESC | nvarchar(120), null |
+| LONG_DESC | nvarchar(120), null |
+| SURF_MAT | nvarchar(10), null |
+| SDI | numeric(38,8), null |
+| PAVE_WIDTH | numeric(38,8), null |
+| RATE_DATE | datetime2(7), null |
+| NUM_CURB | smallint, null |
+| WIDTH2 | numeric(38,8), null |
+| BASEVAL | numeric(38,8), null |
+| SURFVAL | numeric(38,8), null |
+| OLD_FDMID | numeric(38,8), null |
+| DATE_RET | datetime2(7), null |
+| DATE_REV | datetime2(7), null |
+| GLOBALID | uniqueidentifier, not null |
+| DATE_ACT | datetime2(7), null |
+| SYS_DATE | datetime2(7), null |
+
+> Note: `ACQDISPSOURCE` is **not yet present** in `TRN_STREET_ASSETS`. Adding it is the next step (mirrors what was done on `LND_LAND_ASSETS`).
 
 ---
 
@@ -211,4 +253,44 @@ replicas.add_to_replica(sde_conn, "SDEADM.TRN_STREET_RETIRED", "TRN_Rosde")
 
 ## Populating ASSET_ACCOUNTING.TRN_STREET_ASSETS
 
-See the section below for a recommended step-by-step plan.
+### Step 1 — Add `ACQDISPSOURCE` field to `TRN_STREET_ASSETS`
+
+This mirrors what was already done on `LND_LAND_ASSETS`:
+
+```sql
+ALTER TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS
+ADD ACQDISPSOURCE nvarchar(20) NULL;
+```
+
+### Step 2 — Run the RIVA ETL to sync `TRN_STREET_RIVA`
+
+Execute `main.py` (all 3 steps) against PROD to ensure `TRN_STREET_RIVA` is current before loading into the asset accounting layer.
+
+### Step 3 — Generate street × parcel intersection data
+
+Run `new_field_PURCHASE.sql` to produce the street-to-parcel join with aggregated `ACQDISTYPE` values. The result of a previous run is saved in `riva_intersectingParcels.csv` (11,557 rows) for reference.
+
+### Step 4 — Truncate and reload `ASSET_ACCOUNTING.TRN_STREET_ASSETS`
+
+Map fields from `TRN_STREET_RIVA` to `TRN_STREET_ASSETS` and populate `ACQDISPSOURCE` from the Step 3 output:
+
+```sql
+TRUNCATE TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS;
+
+INSERT INTO ASSET_ACCOUNTING.TRN_STREET_ASSETS (
+    STR_CODE, STR_NAME, STR_TYPE, GSA_NAME, FULL_NAME, STR_STATUS, OWN,
+    DATE_ACCEPT, PST_CLASS, SOURCE, FDMID, SHAPE_LENGTH,
+    SHORT_DESC, LONG_DESC, OLD_FDMID, DATE_RET, DATE_REV,
+    DATE_ACT, SYS_DATE, ACQDISPSOURCE
+)
+SELECT
+    r.STR_CODE, r.STR_NAME, r.STR_TYPE, r.GSA_NAME, r.FULL_NAME,
+    r.STR_STATUS, r.OWN, r.DATE_ACCEPT, r.PST_CLASS, r.SOURCE,
+    r.FDMID, r.SHAPE_LENGTH, r.SHORT_DESC, r.LONG_DESC,
+    r.OLD_FDMID, r.DATE_RET, r.DATE_REV, r.DATE_ACT, r.SYS_DATE,
+    p.ACQDISTYPE_AGG  -- or derived ACQDISPSOURCE value from new_field_PURCHASE.sql output
+FROM SDEADM.TRN_STREET_RIVA r
+LEFT JOIN <intersection_result> p ON r.FDMID = p.FDMID;
+```
+
+> **Open question:** `ACQDISPSOURCE` on `LND_LAND_ASSETS` holds values like `"Transaction Summary"` — confirm whether `TRN_STREET_ASSETS.ACQDISPSOURCE` should use the same source values from `LND_ACQUISITION_DISPOSAL.ACQDISTYPE`, or a different derivation.
