@@ -92,6 +92,4 @@ See `claude_lrs.md` for detailed LRS architecture. Key points:
 - QA checks are required after dynamic segmentation updates
 
 ### Known Outstanding Work
-
-- `ACQDISPSOURCE` field has been added to `LND_LAND_ASSETS` and `LAND_ASSETS_EXPORT_VW` but **not yet** to `TRN_STREET_ASSETS` — this is a pending schema change
 - Some streets have blank `SHORT_DESC`/`LONG_DESC` fields that require manual QA review
