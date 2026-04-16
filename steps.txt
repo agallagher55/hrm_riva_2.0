@@ -1,0 +1,43 @@
+ASSET_ACCOUNTING Reload Steps
+==============================
+
+1. Open scripts/main.py and confirm SDE points to the PROD read-write connection:
+       SDE = r"E:\HRM\Scripts\SDE\SQL\Prod\prod_RW_sdeadm.sde"
+
+2. Uncomment all three ETL steps in __main__ and run the script:
+       python scripts/main.py
+
+   This syncs SDEADM.TRN_STREET_RIVA with the authoritative TRN_STREET layer:
+       - Step 1: Inserts new HRM-owned streets
+       - Step 2: Stamps retired streets with DATE_RET, DATE_REV, OLD_FDMID
+       - Step 3: Updates geometry lengths, SHORT_DESC, LONG_DESC on changed segments
+
+3. Review QA flags before loading to asset accounting:
+       - Records with blank SHORT_DESC or LONG_DESC
+       - Records with blank DATE_REV
+       - Known issue: FDMID 700013207
+
+4. Connect to SQL Server and run the following against the PROD database:
+
+       TRUNCATE TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS;
+
+       INSERT INTO ASSET_ACCOUNTING.TRN_STREET_ASSETS (
+           STR_CODE, STR_NAME, STR_TYPE, GSA_NAME, FULL_NAME, STR_STATUS, OWN,
+           DATE_ACCEPT, PST_CLASS, SOURCE, FDMID, SHAPE_LENGTH,
+           SHORT_DESC, LONG_DESC, OLD_FDMID, DATE_RET, DATE_REV,
+           DATE_ACT, SYS_DATE
+       )
+       SELECT
+           r.STR_CODE, r.STR_NAME, r.STR_TYPE, r.GSA_NAME, r.FULL_NAME,
+           r.STR_STATUS, r.OWN, r.DATE_ACCEPT, r.PST_CLASS, r.SOURCE,
+           r.FDMID, r.SHAPE_LENGTH, r.SHORT_DESC, r.LONG_DESC,
+           r.OLD_FDMID, r.DATE_RET, r.DATE_REV, r.DATE_ACT, r.SYS_DATE
+       FROM SDEADM.TRN_STREET_RIVA r;
+
+5. Verify row counts match between TRN_STREET_RIVA and TRN_STREET_ASSETS:
+
+       SELECT COUNT(*) FROM SDEADM.TRN_STREET_RIVA;
+       SELECT COUNT(*) FROM ASSET_ACCOUNTING.TRN_STREET_ASSETS;
+
+Note: ASSET_ACCOUNTING.STREET_ASSETS_EXPORT_VW is a view over TRN_STREET_ASSETS
+and does not need to be reloaded separately.
