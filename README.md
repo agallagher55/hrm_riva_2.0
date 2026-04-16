@@ -229,7 +229,7 @@ SQL Server equivalent of `main.py`. Operates against `TRN_STREET_RIVA_STAGE`:
 Syncs the `SYS_DATE` field from `TRN_STREET` into `TRN_STREET_RIVA` on matching `FDMID`.
 
 ### `new_field_PURCHASE.sql`
-Queries streets against intersecting HRM parcels to derive acquisition/disposal type data. Uses `STIntersects` on the street centreline midpoint to find overlapping parcels, then joins through `LND_HRM_PARCEL_HAS_ACQ_DISP` and `LND_ACQUISITION_DISPOSAL`. Aggregates `ACQDISTYPE` and `TRANS_TYPE` per street/parcel. Output drives `ACQDISPSOURCE` population.
+Queries streets against intersecting HRM parcels. Uses `STIntersects` on the street centreline midpoint to find overlapping parcels, then joins through `LND_HRM_PARCEL_HAS_ACQ_DISP` and `LND_ACQUISITION_DISPOSAL`. Aggregates `ACQDISTYPE` and `TRANS_TYPE` per street/parcel.
 
 ### `land_acq_source.sql`
 Creates/recreates the `ASSET_ACCOUNTING.LAND_ASSETS_EXPORT_VW` view. Includes the new `ACQDISPSOURCE` field (added per the March 2025 email discussion with Rob Farmer). Only exposes assets with a single record (`ASSET_RECORD_COUNT = 1`).
@@ -253,26 +253,13 @@ replicas.add_to_replica(sde_conn, "SDEADM.TRN_STREET_RETIRED", "TRN_Rosde")
 
 ## Populating ASSET_ACCOUNTING.TRN_STREET_ASSETS
 
-### Step 1 — Add `ACQDISPSOURCE` field to `TRN_STREET_ASSETS`
-
-This mirrors what was already done on `LND_LAND_ASSETS`:
-
-```sql
-ALTER TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS
-ADD ACQDISPSOURCE nvarchar(20) NULL;
-```
-
-### Step 2 — Run the RIVA ETL to sync `TRN_STREET_RIVA`
+### Step 1 — Run the RIVA ETL to sync `TRN_STREET_RIVA`
 
 Execute `main.py` (all 3 steps) against PROD to ensure `TRN_STREET_RIVA` is current before loading into the asset accounting layer.
 
-### Step 3 — Generate street × parcel intersection data
+### Step 2 — Truncate and reload `ASSET_ACCOUNTING.TRN_STREET_ASSETS`
 
-Run `new_field_PURCHASE.sql` to produce the street-to-parcel join with aggregated `ACQDISTYPE` values. The result of a previous run is saved in `riva_intersectingParcels.csv` (11,557 rows) for reference.
-
-### Step 4 — Truncate and reload `ASSET_ACCOUNTING.TRN_STREET_ASSETS`
-
-Map fields from `TRN_STREET_RIVA` to `TRN_STREET_ASSETS` and populate `ACQDISPSOURCE` from the Step 3 output:
+Map fields from `TRN_STREET_RIVA` to `TRN_STREET_ASSETS`:
 
 ```sql
 TRUNCATE TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS;
@@ -281,16 +268,12 @@ INSERT INTO ASSET_ACCOUNTING.TRN_STREET_ASSETS (
     STR_CODE, STR_NAME, STR_TYPE, GSA_NAME, FULL_NAME, STR_STATUS, OWN,
     DATE_ACCEPT, PST_CLASS, SOURCE, FDMID, SHAPE_LENGTH,
     SHORT_DESC, LONG_DESC, OLD_FDMID, DATE_RET, DATE_REV,
-    DATE_ACT, SYS_DATE, ACQDISPSOURCE
+    DATE_ACT, SYS_DATE
 )
 SELECT
     r.STR_CODE, r.STR_NAME, r.STR_TYPE, r.GSA_NAME, r.FULL_NAME,
     r.STR_STATUS, r.OWN, r.DATE_ACCEPT, r.PST_CLASS, r.SOURCE,
     r.FDMID, r.SHAPE_LENGTH, r.SHORT_DESC, r.LONG_DESC,
-    r.OLD_FDMID, r.DATE_RET, r.DATE_REV, r.DATE_ACT, r.SYS_DATE,
-    p.ACQDISTYPE_AGG  -- or derived ACQDISPSOURCE value from new_field_PURCHASE.sql output
-FROM SDEADM.TRN_STREET_RIVA r
-LEFT JOIN <intersection_result> p ON r.FDMID = p.FDMID;
+    r.OLD_FDMID, r.DATE_RET, r.DATE_REV, r.DATE_ACT, r.SYS_DATE
+FROM SDEADM.TRN_STREET_RIVA r;
 ```
-
-> **Open question:** `ACQDISPSOURCE` on `LND_LAND_ASSETS` holds values like `"Transaction Summary"` — confirm whether `TRN_STREET_ASSETS.ACQDISPSOURCE` should use the same source values from `LND_ACQUISITION_DISPOSAL.ACQDISTYPE`, or a different derivation.
