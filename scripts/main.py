@@ -1,23 +1,26 @@
 # ETL Process
 
 import arcpy
-import utils
 import os
 
 from datetime import datetime
+
+from gispy import utils
 
 # Settings
 arcpy.SetLogHistory(False)
 arcpy.env.overwriteOutput = True
 
-SDE = r"E:\HRM\Scripts\SDE\SQL\dev_RW_sdeadm.sde"
+SDE = r"E:\HRM\Scripts\SDE\SQL\Dev\dev_RW_sdeadm.sde"
 
-TRN_STREET = os.path.join(SDE, "SDEADM.TRN_streets_routes", "SDEADM.TRN_street")
+# TRN_STREET = os.path.join(SDE, "SDEADM.TRN_streets_routes", "SDEADM.TRN_street")
+TRN_STREET = os.path.join(SDE, "SDEADM.TRNLRS_TRN_STREET_VW")
+
 TRN_STREET_RIVA = os.path.join(SDE, "SDEADM.TRN_STREET_RIVA")
 TRNLRS_SEGMENTED = os.path.join(SDE, "SDEADM.TRNLRS_segmented_street_events")
 E_STREET_STATUS = os.path.join(SDE, "SDEADM.TRNLRS", "SDEADM.E_StreetStatus")
 
-PROJECT_DIR = os.path.dirname(os.getcwd())
+PROJECT_DIR = os.getcwd()
 SCRIPTS_DIR = os.path.join(PROJECT_DIR, "scripts")
 
 # SDE = os.path.join(SCRIPTS_DIR, "prod_copy.gdb")
@@ -68,7 +71,7 @@ def step_one_new_hrm_streets():
         )[0]
         print(arcpy.GetMessages())
 
-        print("\nMaking copy of hrm streets to remove current RIVA streets from...")
+        print("\nMaking copy of HRM streets to remove current RIVA streets from...")
         trn_street_new_streets_riva = arcpy.Select_analysis(
             in_features=trn_streets_hrm,
             out_feature_class=os.path.join(local_gdb, "trn_street_new_streets_riva")
@@ -129,8 +132,10 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
     # Build DATE_ACCEPT lookup from E_StreetStatus keyed by ROUTE_ID (used as DATE_ACT)
     print("Building DATE_ACCEPT lookup from E_StreetStatus...")
     street_status_date_accept = {}
+
     for row in arcpy.da.SearchCursor(E_STREET_STATUS, ["ROUTEID", "DATE_ACCEPT"]):
         routeid, date_accept = row
+
         if routeid not in street_status_date_accept:
             street_status_date_accept[routeid] = date_accept
 
@@ -140,6 +145,7 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
     # FDMIDs in RIVA not yet retired that are absent from TRN_STREET
     riva_retired_fdmids = set()
     for row in arcpy.da.SearchCursor(trn_street_riva, ["FDMID"], "DATE_RET IS NULL"):
+
         fdmid = row[0]
         if fdmid not in trn_street_fdmids:
             riva_retired_fdmids.add(fdmid)
@@ -152,6 +158,7 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
     # TO_DATE IS NOT NULL = retired in LRS; ROUTE_ID links to E_StreetStatus.ROUTEID.
     print("Querying LRS for retirement data...")
     retired_data = {}
+
     for row in arcpy.da.SearchCursor(
         TRNLRS_SEGMENTED,
         ["FDMID", "TO_DATE", "OLD_FDMID", "SHAPE@LENGTH", "ROUTE_ID"],
@@ -170,9 +177,12 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
         trn_street_riva,
         ["FDMID", "DATE_RET", "DATE_REV", "OLD_FDMID", "SHAPE_LENGTH", "DATE_ACT"]
     ) as cursor:
+
         for row in cursor:
             fdmid = row[0]
+
             if fdmid in retired_data:
+
                 data = retired_data[fdmid]
                 row[1] = data['date_ret']
                 row[2] = datetime.today()
@@ -265,10 +275,10 @@ if __name__ == "__main__":
     trn_street_riva_local, local_workspace = step_one_new_hrm_streets()
 
     # STEP 2
-    # step_two_update_retired_streets(trn_street_riva_local, local_workspace)
+    step_two_update_retired_streets(trn_street_riva_local, local_workspace)
 
     # STEP 3
-    # step_three_updating_existing(trn_street_riva_local)
+    step_three_updating_existing(trn_street_riva_local)
 
     # input("Truncate and load RW")
     # input("Truncate and load ASSET_ACCOUNTING.TRN_STREET_RIVA")
