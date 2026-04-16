@@ -56,6 +56,7 @@ hrm_riva_2.0/
 ├── RIVA.vsdx                            # Architecture diagram (Visio)
 ├── RIVA GIS Load - Copy.docx            # GIS load documentation
 ├── RIVA_GIS Link Information sheet.docx # Link information sheet
+├── steps.txt                            # Manual reload steps for ASSET_ACCOUNTING.TRN_STREET_ASSETS
 ├── RE_ TRN_STREET_ASSETS - New Field.msg
 └── RE_ TRN_STREET_RIVA changes.msg
 ```
@@ -66,10 +67,12 @@ hrm_riva_2.0/
 
 | Table | Schema | Description |
 |---|---|---|
-| `TRN_STREET` | `SDEADM` | Source of truth — all HRM street centrelines |
+| `TRNLRS_TRN_STREET_VW` | `SDEADM` | View used as source of truth for street centrelines (replaces direct TRN_STREET feature class access) |
 | `TRN_STREET_RIVA` | `SDEADM` | RIVA working layer — HRM-owned active streets |
 | `TRN_STREET_RIVA_STAGE` | `SDEADM` | Staging table for SQL-based ETL |
-| `TRN_STREET_RETIRED` | `SDEADM` | Archive of retired/replaced street segments |
+| `TRN_STREET_RETIRED` | `SDEADM` | Archive of retired/replaced street segments (used by `riva_load.sql`; Step 2 in `main.py` now uses LRS) |
+| `TRNLRS_segmented_street_events` | `SDEADM` | LRS event table — Step 2 reads retirement data (`TO_DATE`, `OLD_FDMID`, `ROUTE_ID`) from here |
+| `E_StreetStatus` | `SDEADM.TRNLRS` | LRS event table — Step 2 reads `DATE_ACCEPT` by `ROUTEID` for use as `DATE_ACT` |
 | `LND_HRM_PARCEL` | `SDEADM` | HRM parcel polygons |
 | `LND_HRM_PARCEL_HAS_ACQ_DISP` | `SDEADM` | Parcel → acquisition/disposal link |
 | `LND_ACQUISITION_DISPOSAL` | `SDEADM` | Acquisition/disposal records |
@@ -172,13 +175,17 @@ Identifies streets in `TRN_STREET` (owned by HRM, not yet retired) that do not y
 
 ### Step 2 — Retired Streets (`step_two_update_retired_streets`)
 
-Detects RIVA records whose streets have since been retired (moved to `TRN_STREET_RETIRED`) and updates the corresponding fields.
+Detects RIVA records whose FDMIDs are no longer present in `TRN_STREET` and updates the corresponding retirement fields. Retirement data is now sourced from LRS tables rather than `TRN_STREET_RETIRED`:
+
+- `TRNLRS_segmented_street_events` — provides `TO_DATE` (→ `DATE_RET`), `OLD_FDMID`, `SHAPE@LENGTH`, and `ROUTE_ID`
+- `E_StreetStatus` — provides `DATE_ACCEPT` keyed by `ROUTEID` (→ `DATE_ACT`)
 
 Fields updated:
-- `DATE_RET` — from `TRN_STREET_RETIRED`
+- `DATE_RET` — from `TRNLRS_segmented_street_events.TO_DATE`
 - `DATE_REV` — set to today
-- `OLD_FDMID` — from `TRN_STREET_RETIRED`
-- `SHAPE_LENGTH` — recalculated
+- `OLD_FDMID` — from `TRNLRS_segmented_street_events.OLD_FDMID`
+- `SHAPE_LENGTH` — from `TRNLRS_segmented_street_events.SHAPE@LENGTH`
+- `DATE_ACT` — from `E_StreetStatus.DATE_ACCEPT` via `ROUTE_ID`
 
 ### Step 3 — Existing Segment Updates (`step_three_updating_existing`)
 
@@ -200,7 +207,7 @@ For all non-retired RIVA streets whose `SHAPE_LENGTH` differs from the current `
 python scripts/main.py
 ```
 
-Steps 2 and 3 are commented out in `__main__` for safety. Uncomment as needed:
+All three steps are currently active in `__main__`. Comment out selectively before running if only a subset is needed:
 
 ```python
 # STEP 1

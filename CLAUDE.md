@@ -14,9 +14,9 @@ The pipeline requires **ArcGIS Pro with the Location Referencing Extension** and
 python scripts/main.py
 ```
 
-Before running, configure the environment in `scripts/config.ini` and set the `SDE` variable at the top of `main.py` (line 13) to the correct `.sde` connection file path for your environment (LOCAL workstation or SERVER).
+Before running, configure the environment in `scripts/config.ini` and set the `SDE` variable at the top of `main.py` (line 14) to the correct `.sde` connection file path for your environment (LOCAL workstation or SERVER).
 
-The three ETL steps are **commented out by default** in `__main__` as a safety measure. Uncomment selectively:
+All three ETL steps are currently active in `__main__`. Comment out selectively before running if only a subset is needed:
 
 ```python
 step_one_new_hrm_streets()        # Insert new HRM-owned streets into TRN_STREET_RIVA
@@ -31,10 +31,10 @@ There is also a pure SQL equivalent in `scripts/riva_load.sql` that performs the
 ### Data Flow
 
 ```
-TRN_STREET (authoritative source, SDEADM)
+TRN_STREET (via TRNLRS_TRN_STREET_VW, SDEADM)
     │
     ├── Step 1: LEFT JOIN to find new HRM-owned streets → INSERT into TRN_STREET_RIVA
-    ├── Step 2: Find retired streets (DATE_RET populated) → UPDATE TRN_STREET_RETIRED
+    ├── Step 2: Query LRS (TRNLRS_segmented_street_events + E_StreetStatus) → UPDATE retired rows in TRN_STREET_RIVA
     └── Step 3: Detect geometry/attr changes → UPDATE TRN_STREET_RIVA
                                 │
                                 ▼
@@ -48,10 +48,12 @@ TRN_STREET (authoritative source, SDEADM)
 
 | Table | Schema | Purpose |
 |---|---|---|
-| `TRN_STREET` | SDEADM | Source of truth — all street segments |
+| `TRNLRS_TRN_STREET_VW` | SDEADM | View over TRN_STREET used as source of truth (replaces direct feature class access) |
 | `TRN_STREET_RIVA` | SDEADM | HRM-owned active streets (versioned feature class) |
 | `TRN_STREET_RIVA_STAGE` | SDEADM | Staging table for SQL ETL path |
-| `TRN_STREET_RETIRED` | SDEADM | Archive of retired/replaced street segments |
+| `TRN_STREET_RETIRED` | SDEADM | Archive of retired/replaced street segments (used by SQL path; Step 2 in main.py now uses LRS instead) |
+| `TRNLRS_segmented_street_events` | SDEADM | LRS segmented events — Step 2 reads `TO_DATE`, `OLD_FDMID`, `SHAPE@LENGTH`, `ROUTE_ID` from here |
+| `E_StreetStatus` | SDEADM.TRNLRS | LRS event table — Step 2 reads `DATE_ACCEPT` keyed by `ROUTEID` for use as `DATE_ACT` |
 | `LND_HRM_PARCEL` | SDEADM | HRM land parcels (for intersection analysis) |
 | `TRN_STREET_ASSETS` | ASSET_ACCOUNTING | Asset accounting export layer |
 
@@ -65,6 +67,7 @@ TRN_STREET (authoritative source, SDEADM)
 - **`scripts/new_field_PURCHASE.sql`** — Street × parcel midpoint intersection analysis (uses `STIntersects`, `STPointN`)
 - **`scripts/land_acq_source.sql`** — Asset accounting view with acquisition source join
 - **`scripts/trn_street_riva_update.sql`** — Utility to sync `SYS_DATE` field
+- **`steps.txt`** — Manual step-by-step guide for reloading `ASSET_ACCOUNTING.TRN_STREET_ASSETS` from `TRN_STREET_RIVA`
 
 ### Multi-Environment Configuration
 
@@ -82,7 +85,7 @@ Environments: `dev_rw`, `qa_rw`, `prod_rw` (read-write SDE connections owned by 
 The `TRN_Rosde` replica is a **one-way replica** (RW geodatabase → RO geodatabase) containing 51 transportation feature classes (see `TRN_Rosde_updated.txt`). When adding a new feature class:
 1. Use `scripts/add_feature_to_replica.py` or manually unregister/recreate via `replicas.py`
 2. Sync direction: `FROM_GEODATABASE1_TO_2`
-3. `TRN_STREET_RETIRED` was added in the most recent update (required for Step 2 to function in read-only environments)
+3. `TRN_STREET_RETIRED` was added in a previous update — still required for the SQL path (`riva_load.sql`) but Step 2 in `main.py` now sources retirement data from LRS tables (`TRNLRS_segmented_street_events`, `E_StreetStatus`) instead
 
 ### Location Referencing System (LRS)
 
