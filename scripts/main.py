@@ -269,6 +269,40 @@ def step_three_updating_existing(trn_street_riva):
                 # •	Update the DATE_REV in TRN_street_riva for records updated
 
 
+def step_four_validation_review(local_gdb):
+    """
+    QA review of net new streets inserted in step 1.
+    Reads TBL_new_streets_for_riva and reports null/blank counts for
+    SHORT_DESC, LONG_DESC, and DATE_REV — fields that must not be empty.
+    """
+    print("\nStep 4: Validation Review of Net New Streets...")
+
+    tbl = os.path.join(local_gdb, "TBL_new_streets_for_riva")
+
+    if not arcpy.Exists(tbl):
+        print("  TBL_new_streets_for_riva not found — run step_one_new_hrm_streets() first.")
+        return
+
+    fields = ["SHORT_DESC", "LONG_DESC", ]
+    null_counts = {f: 0 for f in fields}
+    total = 0
+
+    for row in arcpy.da.SearchCursor(tbl, fields):
+        total += 1
+        for i, field in enumerate(fields):
+            val = row[i]
+            if val is None or (isinstance(val, str) and val.strip() == ""):
+                null_counts[field] += 1
+
+    print(f"\n  Total net new records in TBL_new_streets_for_riva: {total}")
+    print("  Null/blank counts:")
+    for field, count in null_counts.items():
+        pct = f"{count / total:.0%}" if total else "N/A"
+        print(f"    {field}: {count} null/blank ({pct})")
+
+    return null_counts
+
+
 if __name__ == "__main__":
 
     # STEP 1
@@ -280,11 +314,8 @@ if __name__ == "__main__":
     # STEP 3
     step_three_updating_existing(trn_street_riva_local)
 
+    # STEP 4
+    step_four_validation_review(local_workspace)
+
     # input("Truncate and load RW")
     # input("Truncate and load ASSET_ACCOUNTING.TRN_STREET_RIVA")
-
-    # TODO: Needs some review. The following shouldn't be blank (QA):
-    #  SHORT_DESC
-    #  LONG_DESC
-    #  DATE_REV
-    #  FDMID: 700013207
