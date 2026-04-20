@@ -117,8 +117,6 @@ hrm_riva_2.0/
 | DATE_ACT | datetime2(7), null |
 | SYS_DATE | datetime2(7), null |
 
-> Note: `ACQDISPSOURCE` is **not yet present** in `TRN_STREET_ASSETS`. Adding it is the next step (mirrors what was done on `LND_LAND_ASSETS`).
-
 ---
 
 ## Prerequisites
