@@ -283,7 +283,7 @@ def step_four_validation_review(local_gdb):
         print("  TBL_new_streets_for_riva not found — run step_one_new_hrm_streets() first.")
         return
 
-    fields = ["SHORT_DESC", "LONG_DESC", "DATE_REV"]
+    fields = ["SHORT_DESC", "LONG_DESC", ]
     null_counts = {f: 0 for f in fields}
     total = 0
 
