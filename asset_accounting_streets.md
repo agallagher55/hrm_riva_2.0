@@ -22,7 +22,7 @@ This document covers the two street-related objects in the ASSET_ACCOUNTING sche
 
 **Load process (manual, run on demand):**
 
-1. Run `scripts/main.py` against PROD to sync `TRN_STREET_RIVA` with `TRN_STREET` (3-step ETL).
+1. Run `scripts/trn_street_assets.py` against PROD to sync `TRN_STREET_RIVA` with `TRN_STREET` (3-step ETL).
 2. Connect to SQL Server PROD and run:
 
 ```sql
