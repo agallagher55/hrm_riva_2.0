@@ -28,9 +28,9 @@ SCRIPTS_DIR = os.path.join(PROJECT_DIR, "scripts")
 
 def step_one_new_hrm_streets():
     """
-    - Determine what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA
+    - Determine what new streets have been added to TRNLRS_TRN_STREET_VW that do not exist in TRN_STREET_RIVA
     - TRN_STREET_RIVA
-    - TRN_STREET
+    - TRNLRS_TRN_STREET_VW
 
     :return:
     """
@@ -122,7 +122,7 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
 
     """
     - TRN_STREET_RIVA
-    - TRN_street
+    - TRNLRS_TRN_STREET_VW
 
     :return:
     """

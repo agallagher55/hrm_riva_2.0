@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **GIS ETL pipeline** for Halifax Regional Municipality (HRM) that synchronizes street asset data between an authoritative source (`TRN_STREET`) and a working layer (`TRN_STREET_RIVA`) used by the asset accounting system. It runs against Microsoft SQL Server geodatabases via ArcGIS Pro's ArcPy library.
+This is a **GIS ETL pipeline** for Halifax Regional Municipality (HRM) that synchronizes street asset data between an authoritative source and a working layer (`TRN_STREET_RIVA`) used by the asset accounting system. It runs against Microsoft SQL Server geodatabases via ArcGIS Pro's ArcPy library.
+
+> **Note:** The pipeline was originally built against `SDEADM.TRN_STREET`. Following the transition to a Linear Referencing System (LRS), this has been replaced by `SDEADM.TRNLRS_TRN_STREET_VW`, which is an almost 1-to-1 replacement. All scripts now reference `TRNLRS_TRN_STREET_VW` as the street source.
 
 The pipeline requires **ArcGIS Pro with the Location Referencing Extension** and a valid SDE connection. It cannot run without this environment.
 
@@ -31,7 +33,7 @@ There is also a pure SQL equivalent in `scripts/riva_load.sql` that performs the
 ### Data Flow
 
 ```
-TRN_STREET (authoritative source, SDEADM)
+TRNLRS_TRN_STREET_VW (authoritative source, SDEADM)
     │
     ├── Step 1: LEFT JOIN to find new HRM-owned streets → INSERT into TRN_STREET_RIVA
     ├── Step 2: Find retired streets (DATE_RET populated) → UPDATE TRN_STREET_RETIRED
@@ -48,7 +50,7 @@ TRN_STREET (authoritative source, SDEADM)
 
 | Table | Schema | Purpose |
 |---|---|---|
-| `TRN_STREET` | SDEADM | Source of truth — all street segments |
+| `TRNLRS_TRN_STREET_VW` | SDEADM | Source of truth — all street segments (LRS view, replaced `TRN_STREET`) |
 | `TRN_STREET_RIVA` | SDEADM | HRM-owned active streets (versioned feature class) |
 | `TRN_STREET_RIVA_STAGE` | SDEADM | Staging table for SQL ETL path |
 | `TRN_STREET_RETIRED` | SDEADM | Archive of retired/replaced street segments |

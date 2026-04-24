@@ -20,7 +20,7 @@ SELECT
     STRING_AGG(acq_disp.ACQDISTYPE, ', ') AS ACQDISTYPE_AGG, -- Aggregates multiple values into one field
     STRING_AGG(acq_disp.TRANS_TYPE, ', ') AS TRANS_TYPE_AGG
 
-FROM SDEADM.TRN_STREET trn_streets
+FROM SDEADM.TRNLRS_TRN_STREET_VW trn_streets
 
 -- Get intersecting parcels
 LEFT JOIN SDEADM.LND_HRM_PARCEL hrm_parcels
