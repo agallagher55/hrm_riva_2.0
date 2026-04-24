@@ -115,7 +115,7 @@ def step_one_new_hrm_streets():
         return trn_street_riva_copy, local_gdb
 
     except Exception as e:
-        print(e)
+        raise RuntimeError(f"step_one_new_hrm_streets failed: {e}") from e
 
 
 def step_two_update_retired_streets(trn_street_riva, local_gdb):
