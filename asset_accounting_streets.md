@@ -6,9 +6,151 @@ This document covers the two street-related objects in the ASSET_ACCOUNTING sche
 
 ## Table of Contents
 
+- [End-to-End Flow](#end-to-end-flow)
 - [TRN\_STREET\_ASSETS](#trn_street_assets)
 - [STREET\_ASSETS\_EXPORT\_VW](#street_assets_export_vw)
+- [scripts/trn\_street\_assets.py — Detailed Breakdown](#scriptstrn_street_assetspy--detailed-breakdown)
 - [Open Questions](#open-questions)
+
+---
+
+## End-to-End Flow
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                      SDEADM  (SQL Server — versioned GDB)                  ║
+║                                                                              ║
+║  TRNLRS_TRN_STREET_VW          TRN_STREET_RIVA          E_StreetStatus      ║
+║  ─────────────────────         ───────────────          ──────────────────  ║
+║  Authoritative source.         Working layer.           LRS event table.    ║
+║  All street segments.          HRM-owned active         ROUTEID →           ║
+║  OWN, FDMID, geometry,         segments. Versioned      DATE_ACCEPT lookup. ║
+║  FULL_NAME, FROM_STR,          feature class.                               ║
+║  TO_STR, GSA_LEFT,             DATE_RET flags           TRNLRS_segmented_   ║
+║  OLD_FDMID, DATE_ACT,          retired rows.            street_events       ║
+║  SYS_DATE.                                              ──────────────────  ║
+║                                                         LRS event table.    ║
+║                                                         FDMID, TO_DATE,     ║
+║                                                         OLD_FDMID,          ║
+║                                                         SHAPE@LENGTH,       ║
+║                                                         ROUTE_ID.           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+         │                           │
+         │  OWN = 'HRM' filter       │  export full RIVA copy
+         │  FDMID diff vs RIVA       │  collect active FDMIDs
+         ▼                           ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1  step_one_new_hrm_streets()                                         │
+│                                                                             │
+│  1. Export TRN_STREET_RIVA → scratch.gdb/TRN_STREET_RIVA  (local backup)   │
+│  2. Select HRM-owned streets from TRN_STREET → TRN_street_HRMowned         │
+│  3. Remove FDMIDs already in RIVA (DATE_RET IS NULL) → net-new only        │
+│  4. Export remainder → TBL_new_streets_for_riva                             │
+│  5. Append TBL_new_streets_for_riva into local RIVA copy (NO_TEST)         │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │
+                                 ▼
+              scratch.gdb/TRN_STREET_RIVA  (net-new rows added)
+              scratch.gdb/TBL_new_streets_for_riva  (new rows only)
+                                 │
+         ┌───────────────────────┤
+         │                       │
+         ▼                       ▼
+  TRNLRS_TRN_STREET_VW    TRNLRS_segmented_street_events
+  (FDMID presence check    (TO_DATE, OLD_FDMID,
+   — active segments only)  SHAPE@LENGTH, ROUTE_ID)
+         │                       │
+         │                 E_StreetStatus
+         │                 (ROUTEID → DATE_ACCEPT
+         │                  → DATE_ACT value)
+         │                       │
+         └───────────────────────┤
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 2  step_two_update_retired_streets()                                  │
+│                                                                             │
+│  Detect: active RIVA FDMIDs absent from TRN_STREET  (retired in LRS)       │
+│  Look up retirement metadata in TRNLRS_segmented_street_events              │
+│  Write to RIVA:                                                             │
+│    DATE_RET   ← TO_DATE (from LRS)                                          │
+│    DATE_REV   ← today                                                       │
+│    OLD_FDMID  ← OLD_FDMID (from LRS)                                        │
+│    SHAPE_LENGTH ← updated length (from LRS)                                 │
+│    DATE_ACT   ← DATE_ACCEPT via ROUTE_ID → E_StreetStatus                  │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │
+                                 ▼
+              scratch.gdb/TRN_STREET_RIVA  (retired rows stamped)
+                                 │
+         ┌───────────────────────┘
+         │
+         ▼
+  TRNLRS_TRN_STREET_VW
+  (SHAPE@LENGTH, FULL_NAME,
+   FROM_STR, TO_STR, GSA_LEFT,
+   OLD_FDMID, DATE_ACT, SYS_DATE
+   — keyed by FDMID)
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 3  step_three_updating_existing()                                     │
+│                                                                             │
+│  Detect: active RIVA rows (DATE_RET IS NULL) where SHAPE_LENGTH ≠ TRN_STREET│
+│  Write to RIVA:                                                             │
+│    SHAPE_LENGTH ← TRN_STREET.SHAPE@LENGTH                                   │
+│    SHORT_DESC   ← FULL_NAME + " (" + FROM_STR + " TO " + TO_STR + ")"      │
+│    LONG_DESC    ← FULL_NAME + " " + GSA_LEFT                                │
+│    OLD_FDMID    ← TRN_STREET.OLD_FDMID                                      │
+│    DATE_REV     ← today                                                     │
+│    DATE_ACT     ← TRN_STREET.DATE_ACT                                       │
+│    SYS_DATE     ← TRN_STREET.SYS_DATE                                       │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │
+                                 ▼
+              scratch.gdb/TRN_STREET_RIVA  (attributes/lengths synced)
+                                 │
+         ┌───────────────────────┘
+         │
+         ▼
+  scratch.gdb/TBL_new_streets_for_riva
+  (net-new rows from Step 1)
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 4  step_four_validation_review()                   [QA — no rollback] │
+│                                                                             │
+│  Check: null / blank SHORT_DESC and LONG_DESC in TBL_new_streets_for_riva  │
+│  Output: row count + per-field null counts with % (printed to console)     │
+│  Action: review blanks manually before proceeding to load                  │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │
+                          QA sign-off
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MANUAL SQL LOAD  (SQL Server PROD — run after ETL confirms clean)          │
+│                                                                             │
+│  TRUNCATE TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS;                        │
+│  INSERT … SELECT … FROM SDEADM.TRN_STREET_RIVA;                            │
+│                                                                             │
+│  Full truncate-and-reload. Row counts must match after load.               │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │
+                                 ▼
+                  ASSET_ACCOUNTING.TRN_STREET_ASSETS
+                  (physical table — 19 ETL-populated fields;
+                   SURF_MAT, SDI, PAVE_WIDTH, RATE_DATE, NUM_CURB,
+                   WIDTH2, BASEVAL, SURFVAL not populated by ETL)
+                                 │
+                                 │  live view — no reload needed
+                                 ▼
+                  ASSET_ACCOUNTING.STREET_ASSETS_EXPORT_VW
+                  (dates cast to varchar(20) for consumer compatibility)
+                                 │
+                                 ▼
+                        Asset Accounting System
+```
 
 ---
 
