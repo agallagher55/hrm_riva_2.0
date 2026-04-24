@@ -16,7 +16,9 @@ The pipeline requires **ArcGIS Pro with the Location Referencing Extension** and
 python scripts/trn_street_assets.py
 ```
 
-Before running, configure the environment in `scripts/config.ini` and set the `SDE` variable at the top of `trn_street_assets.py` (line 13) to the correct `.sde` connection file path for your environment (LOCAL workstation or SERVER).
+Before running, configure the environment in `scripts/config.ini` and set the `SDE` variable at the top of `trn_street_assets.py` (line 13) to the correct `.sde` connection file path for your environment (LOCAL workstation or SERVER). The SERVER path should remain consistent across users and not be changed; LOCAL paths are set ad-hoc per developer workstation.
+
+**There is no automated test suite.** All changes must be validated manually against the dev SDE connection before promoting to QA or PROD.
 
 The three ETL steps are **commented out by default** in `__main__` as a safety measure. Uncomment selectively:
 
@@ -98,4 +100,4 @@ See `claude_lrs.md` for detailed LRS architecture. Key points:
 The `final_products/` folder contains example CSV files representing what the client (asset accounting system) ingests as final outputs. Use these as the reference for expected column names, data types, and formatting when making changes to the export views or load scripts.
 
 ### Known Outstanding Work
-- Some streets have blank `SHORT_DESC`/`LONG_DESC` fields that require manual QA review
+- **Blank `SHORT_DESC`/`LONG_DESC` fields** — this is an unresolved bug from the initial pipeline creation, not a data quality issue in the source. It is unknown whether it was ever fixed. If streets are being inserted with blank description fields, investigate the Step 1 insert logic in `trn_street_assets.py` and the equivalent section of `riva_load.sql`.
