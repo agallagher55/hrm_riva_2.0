@@ -91,5 +91,9 @@ See `claude_lrs.md` for detailed LRS architecture. Key points:
 - Events behave according to calibration rules: CALIBRATE, RETIRE, EXTEND, REASSIGN, REALIGN, REVERSE, CARTO_REALIGN
 - QA checks are required after dynamic segmentation updates
 
+### Final Products
+
+The `final_products/` folder contains example CSV files representing what the client (asset accounting system) ingests as final outputs. Use these as the reference for expected column names, data types, and formatting when making changes to the export views or load scripts.
+
 ### Known Outstanding Work
 - Some streets have blank `SHORT_DESC`/`LONG_DESC` fields that require manual QA review
