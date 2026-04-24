@@ -39,13 +39,13 @@ The field `ACQDISPSOURCE` has been added to `ASSET_ACCOUNTING.LND_LAND_ASSETS` a
 ```
 hrm_riva_2.0/
 ├── scripts/
-│   ├── main.py                          # Main ETL script (3-step process)
+│   ├── trn_street_assets.py             # Main ETL script (3-step process)
 │   ├── utils.py                         # Utility functions
 │   ├── replicas.py                      # ArcGIS replica management
 │   ├── add_fields.py                    # Field addition utility
 │   ├── add_feature_to_replica.py        # Add features to replicas
 │   ├── config.ini                       # SDE connection paths (DEV/QA/PROD)
-│   ├── riva_load.sql                    # SQL mirror of main.py ETL (3-step)
+│   ├── riva_load.sql                    # SQL mirror of trn_street_assets.py ETL (3-step)
 │   ├── trn_street_riva_update.sql       # SYS_DATE sync utility
 │   ├── new_field_PURCHASE.sql           # Streets × parcels × acquisition query
 │   ├── land_acq_source.sql              # LAND_ASSETS_EXPORT_VW definition
@@ -146,7 +146,7 @@ prod_rw = E:\HRM\Scripts\SDE\SQL\Prod\prod_RW_sdeadm.sde
 ...
 ```
 
-The `SDE` path at the top of `main.py` must also be set before running:
+The `SDE` path at the top of `trn_street_assets.py` must also be set before running:
 
 ```python
 SDE = r"E:\HRM\Scripts\SDE\SQL\dev_RW_sdeadm.sde"
@@ -154,7 +154,7 @@ SDE = r"E:\HRM\Scripts\SDE\SQL\dev_RW_sdeadm.sde"
 
 ---
 
-## ETL Process — main.py
+## ETL Process — trn_street_assets.py
 
 The script runs a three-step ETL to keep `TRN_STREET_RIVA` in sync with `TRN_STREET`.
 
@@ -195,7 +195,7 @@ For all non-retired RIVA streets whose `SHAPE_LENGTH` differs from the current `
 ### Running the Script
 
 ```bash
-python scripts/main.py
+python scripts/trn_street_assets.py
 ```
 
 Steps 2 and 3 are commented out in `__main__` for safety. Uncomment as needed:
@@ -218,7 +218,7 @@ step_three_updating_existing(trn_street_riva_local)
 ## SQL Scripts
 
 ### `riva_load.sql`
-SQL Server equivalent of `main.py`. Operates against `TRN_STREET_RIVA_STAGE`:
+SQL Server equivalent of `trn_street_assets.py`. Operates against `TRN_STREET_RIVA_STAGE`:
 1. Inserts new HRM streets not yet in RIVA.
 2. Updates retired streets with `DATE_RET`, `DATE_REV`, `OLD_FDMID`.
 3. Updates existing segments where `SHAPE_LENGTH` has changed.
@@ -253,7 +253,7 @@ replicas.add_to_replica(sde_conn, "SDEADM.TRN_STREET_RETIRED", "TRN_Rosde")
 
 ### Step 1 — Run the RIVA ETL to sync `TRN_STREET_RIVA`
 
-Execute `main.py` (all 3 steps) against PROD to ensure `TRN_STREET_RIVA` is current before loading into the asset accounting layer.
+Execute `trn_street_assets.py` (all 3 steps) against PROD to ensure `TRN_STREET_RIVA` is current before loading into the asset accounting layer.
 
 ### Step 2 — Truncate and reload `ASSET_ACCOUNTING.TRN_STREET_ASSETS`
 

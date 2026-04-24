@@ -25,7 +25,7 @@ This document covers the five objects visible in the ASSET_ACCOUNTING schema and
 
 **Load process (manual, run on demand):**
 
-1. Run `scripts/main.py` against PROD to sync `TRN_STREET_RIVA` with `TRN_STREET` (3-step ETL).
+1. Run `scripts/trn_street_assets.py` against PROD to sync `TRN_STREET_RIVA` with `TRN_STREET` (3-step ETL).
 2. Connect to SQL Server PROD and run:
 
 ```sql

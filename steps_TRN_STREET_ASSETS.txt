@@ -1,11 +1,11 @@
 ASSET_ACCOUNTING Reload Steps
 ==============================
 
-1. Open scripts/main.py and confirm SDE points to the PROD read-write connection:
+1. Open scripts/trn_street_assets.py and confirm SDE points to the PROD read-write connection:
        SDE = r"E:\HRM\Scripts\SDE\SQL\Prod\prod_RW_sdeadm.sde"
 
 2. Uncomment all three ETL steps in __main__ and run the script:
-       python scripts/main.py
+       python scripts/trn_street_assets.py
 
    This syncs SDEADM.TRN_STREET_RIVA with the authoritative TRN_STREET layer:
        - Step 1: Inserts new HRM-owned streets

@@ -13,10 +13,10 @@ The pipeline requires **ArcGIS Pro with the Location Referencing Extension** and
 ## Running the Pipeline
 
 ```bash
-python scripts/main.py
+python scripts/trn_street_assets.py
 ```
 
-Before running, configure the environment in `scripts/config.ini` and set the `SDE` variable at the top of `main.py` (line 13) to the correct `.sde` connection file path for your environment (LOCAL workstation or SERVER).
+Before running, configure the environment in `scripts/config.ini` and set the `SDE` variable at the top of `trn_street_assets.py` (line 13) to the correct `.sde` connection file path for your environment (LOCAL workstation or SERVER).
 
 The three ETL steps are **commented out by default** in `__main__` as a safety measure. Uncomment selectively:
 
@@ -59,8 +59,8 @@ TRNLRS_TRN_STREET_VW (authoritative source, SDEADM)
 
 ### Scripts
 
-- **`scripts/main.py`** — Python ETL orchestrator using ArcPy cursors and spatial operations
-- **`scripts/riva_load.sql`** — T-SQL equivalent of main.py; use when running directly against SQL Server
+- **`scripts/trn_street_assets.py`** — Python ETL orchestrator using ArcPy cursors and spatial operations
+- **`scripts/riva_load.sql`** — T-SQL equivalent of trn_street_assets.py; use when running directly against SQL Server
 - **`scripts/replicas.py`** — Manages the `TRN_Rosde` one-way replica (RW→RO sync); run this when adding new feature classes to the replica
 - **`scripts/add_fields.py`** — Adds new fields across DEV/QA/PROD environments
 - **`scripts/add_feature_to_replica.py`** — Adds a new feature class to the replica dataset
