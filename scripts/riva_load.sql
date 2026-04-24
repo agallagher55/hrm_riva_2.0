@@ -37,7 +37,7 @@ SELECT
     trn_streets.DATE_ACT,
     trn_streets.SYS_DATE,
     trn_streets.SHAPE.STLength() AS SHAPE_LENGTH
-FROM SDEADM.TRN_STREET trn_streets
+FROM SDEADM.TRNLRS_TRN_STREET_VW trn_streets
 LEFT JOIN SDEADM.TRN_STREET_RIVA riva_streets
     ON trn_streets.FDMID = riva_streets.FDMID
 WHERE
@@ -77,7 +77,7 @@ SET riva_streets.SHAPE_LENGTH = trn_streets.SHAPE.STLength(),  -- Update SHAPE_L
     riva_streets.DATE_REV = GETDATE()  -- Update DATE_REV to today's date
 
 FROM SDEADM.TRN_STREET_RIVA_STAGE riva_streets
-JOIN SDEADM.TRN_STREET trn_streets
+JOIN SDEADM.TRNLRS_TRN_STREET_VW trn_streets
 	ON riva_streets.FDMID = trn_streets.FDMID
 WHERE riva_streets.DATE_RET IS NULL AND
 	riva_streets.SHAPE_LENGTH <> trn_streets.SHAPE.STLength()
