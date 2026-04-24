@@ -1,5 +1,3 @@
-# ETL Process
-
 import arcpy
 import os
 
@@ -11,19 +9,16 @@ from gispy import utils
 arcpy.SetLogHistory(False)
 arcpy.env.overwriteOutput = True
 
-SDE = r"E:\HRM\Scripts\SDE\SQL\Dev\dev_RW_sdeadm.sde"
+SDE = r"E:\HRM\Scripts\SDE\SQL\QA\qa_RW_sdeadm.sde"
 
-# TRN_STREET = os.path.join(SDE, "SDEADM.TRN_streets_routes", "SDEADM.TRN_street")
-TRN_STREET = os.path.join(SDE, "SDEADM.TRNLRS_TRN_STREET_VW")
-
-TRN_STREET_RIVA = os.path.join(SDE, "SDEADM.TRN_STREET_RIVA")
+TRNLRS_TRN_STREET_VW = os.path.join(SDE, "SDEADM.TRNLRS_TRN_STREET_VW")
 TRNLRS_SEGMENTED = os.path.join(SDE, "SDEADM.TRNLRS_segmented_street_events")
 E_STREET_STATUS = os.path.join(SDE, "SDEADM.TRNLRS", "SDEADM.E_StreetStatus")
 
+TRN_STREET_RIVA = os.path.join(SDE, "SDEADM.TRN_STREET_RIVA")
+
 PROJECT_DIR = os.getcwd()
 SCRIPTS_DIR = os.path.join(PROJECT_DIR, "scripts")
-
-# SDE = os.path.join(SCRIPTS_DIR, "prod_copy.gdb")
 
 
 def step_one_new_hrm_streets():
@@ -65,7 +60,7 @@ def step_one_new_hrm_streets():
         # Select from TRN_street all records where OWN = HRM.
         print("\nFiltering TRN_street for HRM streets...")
         trn_streets_hrm = arcpy.Select_analysis(
-            in_features=TRN_STREET,
+            in_features=TRNLRS_TRN_STREET_VW,
             out_feature_class=os.path.join(local_gdb, "TRN_street_HRMowned"),
             where_clause=hrm_streets_filter
         )[0]
@@ -140,7 +135,7 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
             street_status_date_accept[routeid] = date_accept
 
     print("Getting records in TRN_STREET_RIVA that are no longer in TRN_STREET...")
-    trn_street_fdmids = set(x[0] for x in arcpy.da.SearchCursor(TRN_STREET, ['FDMID']))
+    trn_street_fdmids = set(x[0] for x in arcpy.da.SearchCursor(TRNLRS_TRN_STREET_VW, ['FDMID']))
 
     # FDMIDs in RIVA not yet retired that are absent from TRN_STREET
     riva_retired_fdmids = set()
@@ -215,7 +210,7 @@ def step_three_updating_existing(trn_street_riva):
             'shape_length': x[1], 'full_name': x[2], 'from_str': x[3], 'to_str': x[4], 'gsa_left': x[5],
             'old_fdmid': x[6], 'date_act': x[7], 'sys_date': x[8]
         } for x in arcpy.da.SearchCursor(
-            TRN_STREET,
+            TRNLRS_TRN_STREET_VW,
             ["FDMID", "SHAPE@LENGTH", "FULL_NAME", "FROM_STR", "TO_STR", "GSA_LEFT", "OLD_FDMID", "DATE_ACT", "SYS_DATE"],
         )
     }
@@ -289,8 +284,10 @@ def step_four_validation_review(local_gdb):
 
     for row in arcpy.da.SearchCursor(tbl, fields):
         total += 1
+        
         for i, field in enumerate(fields):
             val = row[i]
+            
             if val is None or (isinstance(val, str) and val.strip() == ""):
                 null_counts[field] += 1
 
