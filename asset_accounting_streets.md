@@ -10,6 +10,7 @@ This document covers the two street-related objects in the ASSET_ACCOUNTING sche
 - [TRN\_STREET\_ASSETS](#trn_street_assets)
 - [STREET\_ASSETS\_EXPORT\_VW](#street_assets_export_vw)
 - [scripts/trn\_street\_assets.py — Detailed Breakdown](#scriptstrn_street_assetspy--detailed-breakdown)
+  - [Step 5 — step\_five\_truncate\_load\_asset\_accounting()](#step-5--step_five_truncate_load_asset_accounting)
 - [Open Questions](#open-questions)
 
 ---
@@ -100,7 +101,7 @@ This document covers the two street-related objects in the ASSET_ACCOUNTING sche
 │  Write to RIVA:                                                             │
 │    SHAPE_LENGTH ← TRN_STREET.SHAPE@LENGTH                                   │
 │    SHORT_DESC   ← FULL_NAME + " (" + FROM_STR + " TO " + TO_STR + ")"      │
-│    LONG_DESC    ← FULL_NAME + " " + GSA_LEFT                                │
+│    LONG_DESC    ← FULL_NAME + " (" + GSA_LEFT + ")"                         │
 │    OLD_FDMID    ← TRN_STREET.OLD_FDMID                                      │
 │    DATE_REV     ← today                                                     │
 │    DATE_ACT     ← TRN_STREET.DATE_ACT                                       │
@@ -129,19 +130,15 @@ This document covers the two street-related objects in the ASSET_ACCOUNTING sche
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  MANUAL SQL LOAD  (SQL Server PROD — run after ETL confirms clean)          │
+│  STEP 5  step_five_truncate_load_asset_accounting()                         │
 │                                                                             │
-│  TRUNCATE TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS;                        │
-│  INSERT … SELECT … FROM SDEADM.TRN_STREET_RIVA;                            │
-│                                                                             │
-│  Full truncate-and-reload. Row counts must match after load.               │
+│  Truncate ASSET_ACCOUNTING.TRN_STREET_RIVA                                  │
+│  Append all rows from scratch.gdb/TRN_STREET_RIVA (or SDEADM.TRN_STREET_   │
+│  RIVA if run standalone).  Row counts must match after load.               │
 └────────────────────────────────┬────────────────────────────────────────────┘
                                  │
                                  ▼
-                  ASSET_ACCOUNTING.TRN_STREET_ASSETS
-                  (physical table — 19 ETL-populated fields;
-                   SURF_MAT, SDI, PAVE_WIDTH, RATE_DATE, NUM_CURB,
-                   WIDTH2, BASEVAL, SURFVAL not populated by ETL)
+                  ASSET_ACCOUNTING.TRN_STREET_RIVA
                                  │
                                  │  live view — no reload needed
                                  ▼
@@ -162,29 +159,9 @@ This document covers the two street-related objects in the ASSET_ACCOUNTING sche
 
 **Source:** `SDEADM.TRN_STREET_RIVA`
 
-**Load process (manual, run on demand):**
+**Load process:** Run `scripts/trn_street_assets.py` against PROD. Steps 1–3 sync the local RIVA copy; Step 4 validates it; Step 5 (`step_five_truncate_load_asset_accounting`) performs the truncate-and-reload into `ASSET_ACCOUNTING.TRN_STREET_RIVA` automatically.
 
-1. Run `scripts/trn_street_assets.py` against PROD to sync `TRN_STREET_RIVA` with `TRN_STREET` (3-step ETL).
-2. Connect to SQL Server PROD and run:
-
-```sql
-TRUNCATE TABLE ASSET_ACCOUNTING.TRN_STREET_ASSETS;
-
-INSERT INTO ASSET_ACCOUNTING.TRN_STREET_ASSETS (
-    STR_CODE, STR_NAME, STR_TYPE, GSA_NAME, FULL_NAME, STR_STATUS, OWN,
-    DATE_ACCEPT, PST_CLASS, SOURCE, FDMID, SHAPE_LENGTH,
-    SHORT_DESC, LONG_DESC, OLD_FDMID, DATE_RET, DATE_REV,
-    DATE_ACT, SYS_DATE
-)
-SELECT
-    r.STR_CODE, r.STR_NAME, r.STR_TYPE, r.GSA_NAME, r.FULL_NAME,
-    r.STR_STATUS, r.OWN, r.DATE_ACCEPT, r.PST_CLASS, r.SOURCE,
-    r.FDMID, r.SHAPE_LENGTH, r.SHORT_DESC, r.LONG_DESC,
-    r.OLD_FDMID, r.DATE_RET, r.DATE_REV, r.DATE_ACT, r.SYS_DATE
-FROM SDEADM.TRN_STREET_RIVA r;
-```
-
-This is a full truncate-and-reload; there is no incremental update. Row counts should match between `TRN_STREET_RIVA` and `TRN_STREET_ASSETS` after the load.
+This is a full truncate-and-reload; there is no incremental update. Row counts should match between the source and `ASSET_ACCOUNTING.TRN_STREET_RIVA` after the load.
 
 **Reload steps documented in:** `steps.txt`
 
@@ -210,15 +187,17 @@ This is a full truncate-and-reload; there is no incremental update. Row counts s
 
 ## scripts/trn_street_assets.py — Detailed Breakdown
 
-The ETL orchestrator that keeps `TRN_STREET_RIVA` in sync with `TRNLRS_TRN_STREET_VW`. It runs four functions in sequence against a **local scratch.gdb** copy of RIVA; the edited local copy is then used as the source for the final truncate-and-reload into `ASSET_ACCOUNTING.TRN_STREET_ASSETS`.
+The ETL orchestrator that keeps `TRN_STREET_RIVA` in sync with `TRNLRS_TRN_STREET_VW`. It runs five functions in sequence against a **local scratch.gdb** copy of RIVA; the edited local copy is then used as the source for the final truncate-and-reload into `ASSET_ACCOUNTING.TRN_STREET_RIVA`.
 
 ### Global Configuration
 
 | Variable | Value | Purpose |
 |---|---|---|
-| `SDE` | `.sde` file path | Active connection (dev/qa/prod RW) — edit before running |
-| `TRN_STREET` | `SDEADM.TRNLRS_TRN_STREET_VW` | Authoritative street source (LRS view) |
+| `SDE` | `.sde` file path | Active SDEADM connection (dev/qa/prod RW) — edit before running |
+| `ASSET_ACCOUNTING_SDE` | `.sde` file path | ASSET_ACCOUNTING connection — edit to match environment |
+| `TRNLRS_TRN_STREET_VW` | `SDEADM.TRNLRS_TRN_STREET_VW` | Authoritative street source (LRS view) |
 | `TRN_STREET_RIVA` | `SDEADM.TRN_STREET_RIVA` | Working layer being updated |
+| `AA_TRN_STREET_RIVA` | `ASSET_ACCOUNTING.TRN_STREET_RIVA` | Target table for the final truncate-and-load |
 | `TRNLRS_SEGMENTED` | `SDEADM.TRNLRS_segmented_street_events` | LRS event table for retirement data |
 | `E_STREET_STATUS` | `SDEADM.TRNLRS\SDEADM.E_StreetStatus` | LRS event table for `DATE_ACCEPT` lookup |
 
@@ -248,7 +227,7 @@ The ETL orchestrator that keeps `TRN_STREET_RIVA` in sync with `TRNLRS_TRN_STREE
 
 ---
 
-### Step 2 — `step_two_update_retired_streets(trn_street_riva, local_gdb)`
+### Step 2 — `step_two_update_retired_streets(new_riva_streets)`
 
 **Purpose:** Detect RIVA records that have disappeared from `TRN_STREET` (i.e., retired in the LRS) and stamp them with retirement metadata.
 
@@ -298,7 +277,7 @@ Short-circuits with a message if `riva_retired_fdmids` is empty.
 |---|---|
 | `SHAPE_LENGTH` | `TRN_STREET.SHAPE@LENGTH` |
 | `SHORT_DESC` | `FULL_NAME + " (" + FROM_STR + " TO " + TO_STR + ")"` |
-| `LONG_DESC` | `FULL_NAME + " " + GSA_LEFT` |
+| `LONG_DESC` | `FULL_NAME + " (" + GSA_LEFT + ")"` |
 | `OLD_FDMID` | `TRN_STREET.OLD_FDMID` |
 | `DATE_REV` | `datetime.today()` |
 | `DATE_ACT` | `TRN_STREET.DATE_ACT` |
@@ -314,7 +293,30 @@ Short-circuits with a message if `riva_retired_fdmids` is empty.
 
 **Output:** Printed summary — total row count and per-field null/blank count with percentage. Returns `null_counts` dict.
 
-**Not a hard stop:** Step 4 does not halt or roll back; it reports problems for manual review. Any blanks flagged here should be QA'd before running the truncate-and-reload into `ASSET_ACCOUNTING.TRN_STREET_ASSETS`.
+**Not a hard stop:** Step 4 does not halt or roll back; it reports problems for manual review. Any blanks flagged here should be QA'd before proceeding to Step 5.
+
+---
+
+### Step 5 — `step_five_truncate_load_asset_accounting(source_riva=None)`
+
+**Purpose:** Truncate `ASSET_ACCOUNTING.TRN_STREET_RIVA` and reload it from the local RIVA copy produced by Steps 1–3 (or directly from `SDEADM.TRN_STREET_RIVA` when run standalone).
+
+**Parameters:**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `source_riva` | `TRN_STREET_RIVA` (`SDEADM`) | Path to the source table/feature class to load from. Pass `new_riva_streets` (the local scratch.gdb copy) when calling from `__main__`. |
+
+**Logic:**
+1. `arcpy.TruncateTable_management(AA_TRN_STREET_RIVA)` — removes all existing rows from `ASSET_ACCOUNTING.TRN_STREET_RIVA`.
+2. `arcpy.Append_management(inputs=source_riva, target=AA_TRN_STREET_RIVA, schema_type="NO_TEST")` — loads all rows from the source.
+3. `arcpy.GetCount_management` — verifies and prints the post-load row count.
+
+**Returns:** path to `AA_TRN_STREET_RIVA`.
+
+**Raises:** `RuntimeError` on any ArcPy failure (wraps the original exception).
+
+**Connection requirement:** `ASSET_ACCOUNTING_SDE` must point to a valid `.sde` connection file with write access to `ASSET_ACCOUNTING.TRN_STREET_RIVA`. Update this constant at the top of the script before running.
 
 ---
 
@@ -327,12 +329,12 @@ scratch.gdb/TRN_STREET_RIVA  ←──── Step 1 (INSERT new HRM streets)
          │
          ├── Step 3 (UPDATE SHAPE_LENGTH / SHORT_DESC / LONG_DESC / DATE_REV on changed rows)
          │
-         └── Step 4 (QA: report null SHORT_DESC / LONG_DESC in TBL_new_streets_for_riva)
-                    ↓
-    Manual: TRUNCATE + INSERT into ASSET_ACCOUNTING.TRN_STREET_ASSETS
+         ├── Step 4 (QA: report null SHORT_DESC / LONG_DESC in TBL_new_streets_for_riva)
+         │
+         └── Step 5 (TRUNCATE + LOAD ASSET_ACCOUNTING.TRN_STREET_RIVA)
 ```
 
-**Important:** Steps 2–4 all receive the same local RIVA copy path (`trn_street_riva_local`) returned by Step 1. The three ETL steps are commented out in `__main__` by default — uncomment selectively before running.
+**Important:** Steps 2–5 all receive the same local RIVA copy path (`new_riva_streets`) returned by Step 1. The ETL steps are commented out in `__main__` by default — uncomment selectively before running.
 
 ---
 
