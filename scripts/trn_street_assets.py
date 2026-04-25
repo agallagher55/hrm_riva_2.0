@@ -10,14 +10,13 @@ arcpy.SetLogHistory(False)
 arcpy.env.overwriteOutput = True
 
 SDE = r"E:\HRM\Scripts\SDE\SQL\qa_RW_sdeadm.sde"
-ASSET_ACCOUNTING_SDE = r"E:\HRM\Scripts\SDE\SQL\qa_RW_asset_accounting.sde"
 
 TRNLRS_TRN_STREET_VW = os.path.join(SDE, "SDEADM.TRNLRS_TRN_STREET_VW")
 TRNLRS_SEGMENTED = os.path.join(SDE, "SDEADM.TRNLRS_segmented_street_events")
 E_STREET_STATUS = os.path.join(SDE, "SDEADM.TRNLRS", "SDEADM.E_StreetStatus")
 
 TRN_STREET_RIVA = os.path.join(SDE, "SDEADM.TRN_STREET_RIVA")
-AA_TRN_STREET_RIVA = os.path.join(ASSET_ACCOUNTING_SDE, "ASSET_ACCOUNTING.TRN_STREET_RIVA")
+AA_TRN_STREET_RIVA = os.path.join(SDE, "ASSET_ACCOUNTING.TRN_STREET_RIVA")
 
 PROJECT_DIR = os.path.dirname(os.getcwd())
 SCRIPTS_DIR = os.path.join(PROJECT_DIR, "scripts")
@@ -37,7 +36,8 @@ def step_one_new_hrm_streets(local_gdb: str):
     try:
 
         # Step 1 - Determine what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA
-        print("\nStep 1: Determining what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA...")
+        print(
+            "\nStep 1: Determining what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA...")
 
         # Select from TRN_street all records where OWN = HRM.
         print("\nFiltering TRN_street for HRM streets...")
@@ -84,7 +84,7 @@ def step_one_new_hrm_streets(local_gdb: str):
 
         # APPEND
         trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
-        
+
         # Export TRN_STREET_RIVA to local workspace for backup purposes
         print("\nExporting TRN_STREET_RIVA to local workspace...")
         arcpy.TableToGeodatabase_conversion(
@@ -107,7 +107,6 @@ def step_one_new_hrm_streets(local_gdb: str):
 
 
 def step_two_update_retired_streets(new_riva_streets):
-
     """
     Update retired streets in set of RIVA streets to be added to RIVA streets table
     - TRN_STREET_RIVA
@@ -148,14 +147,13 @@ def step_two_update_retired_streets(new_riva_streets):
     retired_data = {}
 
     for row in arcpy.da.SearchCursor(
-        TRNLRS_SEGMENTED,
-        ["FDMID", "TO_DATE", "OLD_FDMID", "SHAPE@LENGTH", "ROUTE_ID"],
-        "TO_DATE IS NOT NULL AND FDMID IS NOT NULL"
+            TRNLRS_SEGMENTED,
+            ["FDMID", "TO_DATE", "OLD_FDMID", "SHAPE@LENGTH", "ROUTE_ID"],
+            "TO_DATE IS NOT NULL AND FDMID IS NOT NULL"
     ):
         fdmid, to_date, old_fdmid, shape_length, route_id = row
 
         if fdmid in riva_retired_fdmids and fdmid not in retired_data:
-
             retired_data[fdmid] = {
                 'date_ret': to_date,
                 'old_fdmid': old_fdmid,
@@ -164,15 +162,14 @@ def step_two_update_retired_streets(new_riva_streets):
             }
 
     with arcpy.da.UpdateCursor(
-        new_riva_streets,
-        ["FDMID", "DATE_RET", "DATE_REV", "OLD_FDMID", "SHAPE_LENGTH", "DATE_ACT"]
+            new_riva_streets,
+            ["FDMID", "DATE_RET", "DATE_REV", "OLD_FDMID", "SHAPE_LENGTH", "DATE_ACT"]
     ) as cursor:
 
         for row in cursor:
             fdmid = row[0]
 
             if fdmid in retired_data:
-
                 data = retired_data[fdmid]
                 row[1] = data['date_ret']
                 row[2] = datetime.today()
@@ -182,8 +179,8 @@ def step_two_update_retired_streets(new_riva_streets):
                 cursor.updateRow(row)
                 print(f"\tUpdated FDMID: {fdmid}")
 
-
     # TODO: Create feature of retired streets
+
 
 def step_three_updating_existing_riva_streets(trn_street_riva):
     """
@@ -310,9 +307,7 @@ def step_five_truncate_load_asset_accounting(source_riva: str = None):
     Truncate ASSET_ACCOUNTING.TRN_STREET_RIVA and reload from SDEADM.TRN_STREET_RIVA
     (or a supplied local copy produced by steps 1–3).
     """
-    if source_riva is None:
-        source_riva = TRN_STREET_RIVA
-
+    
     target = AA_TRN_STREET_RIVA
 
     try:
