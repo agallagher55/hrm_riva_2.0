@@ -34,13 +34,6 @@ def step_one_new_hrm_streets(local_gdb: str):
 
     try:
 
-        # Export TRN_STREET_RIVA to local workspace for backup purposes
-        print("\nExporting TRN_STREET_RIVA to local workspace for backup purposes...")
-        arcpy.TableToGeodatabase_conversion(
-            Input_Table=TRN_STREET_RIVA,
-            Output_Geodatabase=local_gdb
-        )
-
         # Step 1 - Determine what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA
         print("\nStep 1: Determining what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA...")
 
@@ -89,12 +82,19 @@ def step_one_new_hrm_streets(local_gdb: str):
 
         # APPEND
         trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
+        
+        # Export TRN_STREET_RIVA to local workspace for backup purposes
+        print("\nExporting TRN_STREET_RIVA to local workspace...")
+        arcpy.TableToGeodatabase_conversion(
+            Input_Table=TRN_STREET_RIVA,
+            Output_Geodatabase=local_gdb
+        )
 
         print(f"\nAppending new streets into RIVA table...")
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
             target=trn_street_riva_copy,
-            schema_type="NO_TEST"
+            schema_type="NO_TEST"  # STR_CODE yields to null
         )
 
         return trn_street_riva_copy, local_gdb
@@ -244,7 +244,7 @@ def step_three_updating_existing_riva_streets(trn_street_riva):
 
                 row[1] = trn_street_len
                 row[2] = f'{full_name} ({from_str} TO {to_str})'  # SHORT_DESC
-                row[3] = f'{full_name} {gsa_left}'  # LONG_DESC
+                row[3] = f'{full_name} ({gsa_left})'  # LONG_DESC
                 row[4] = old_fdmid  # OLD_FDMID
                 row[5] = datetime.today()  # DATE_REV
                 row[6] = date_act  # DATE_ACT
