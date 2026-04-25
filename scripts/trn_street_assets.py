@@ -9,7 +9,7 @@ from gispy import utils
 arcpy.SetLogHistory(False)
 arcpy.env.overwriteOutput = True
 
-SDE = r"E:\HRM\Scripts\SDE\SQL\QA\qa_RW_sdeadm.sde"
+SDE = r"E:\HRM\Scripts\SDE\SQL\qa_RW_sdeadm.sde"
 
 TRNLRS_TRN_STREET_VW = os.path.join(SDE, "SDEADM.TRNLRS_TRN_STREET_VW")
 TRNLRS_SEGMENTED = os.path.join(SDE, "SDEADM.TRNLRS_segmented_street_events")
@@ -17,11 +17,11 @@ E_STREET_STATUS = os.path.join(SDE, "SDEADM.TRNLRS", "SDEADM.E_StreetStatus")
 
 TRN_STREET_RIVA = os.path.join(SDE, "SDEADM.TRN_STREET_RIVA")
 
-PROJECT_DIR = os.getcwd()
+PROJECT_DIR = os.path.dirname(os.getcwd())
 SCRIPTS_DIR = os.path.join(PROJECT_DIR, "scripts")
 
 
-def step_one_new_hrm_streets():
+def step_one_new_hrm_streets(local_gdb: str):
     """
     - Determine what new streets have been added to TRNLRS_TRN_STREET_VW that do not exist in TRN_STREET_RIVA
     - TRN_STREET_RIVA
@@ -31,20 +31,8 @@ def step_one_new_hrm_streets():
     """
 
     hrm_streets_filter = "OWN LIKE 'HRM'"
-    not_retired_filter = "DATE_RET IS NULL"
 
     try:
-
-        # Create local workspace
-        local_gdb = os.path.join(SCRIPTS_DIR, "scratch.gdb")
-
-        if not arcpy.Exists(local_gdb):
-            print("Creating local geodatabase...")
-
-            utils.create_fgdb(
-                out_folder_path=SCRIPTS_DIR,
-                out_name="scratch.gdb"
-            )
 
         # Export TRN_STREET_RIVA to local workspace for backup purposes
         print("\nExporting TRN_STREET_RIVA to local workspace for backup purposes...")
@@ -52,54 +40,56 @@ def step_one_new_hrm_streets():
             Input_Table=TRN_STREET_RIVA,
             Output_Geodatabase=local_gdb
         )
-        trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
 
         # Step 1 - Determine what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA
         print("\nStep 1: Determining what new streets have been added to TRN_street that do not exist in TRN_STREET_RIVA...")
 
         # Select from TRN_street all records where OWN = HRM.
         print("\nFiltering TRN_street for HRM streets...")
-        trn_streets_hrm = arcpy.Select_analysis(
+        hrm_owned_streets = arcpy.Select_analysis(
             in_features=TRNLRS_TRN_STREET_VW,
             out_feature_class=os.path.join(local_gdb, "TRN_street_HRMowned"),
             where_clause=hrm_streets_filter
         )[0]
-        print(arcpy.GetMessages())
-
-        print("\nMaking copy of HRM streets to remove current RIVA streets from...")
-        trn_street_new_streets_riva = arcpy.Select_analysis(
-            in_features=trn_streets_hrm,
-            out_feature_class=os.path.join(local_gdb, "trn_street_new_streets_riva")
-        )[0]
-        print(arcpy.GetMessages())
-
+        
         # Select in TRN_STREET_RIVA all records AND
         # Remove from current selection all records where DATE_RET IS NOT NULL
         print("\nFiltering TRN_STREET_RIVA for non-retired street FDMIDs...")
-        current_trn_street_riva_fdmids = [
+
+        not_retired_filter = "DATE_RET IS NULL"
+
+        non_retired_riva_fdmids = [
             row[0] for row in arcpy.da.SearchCursor(TRN_STREET_RIVA, ["FDMID"], not_retired_filter)
         ]
 
+        print("\nMaking copy of HRM streets to remove current RIVA streets from...")
+        hrm_owned_new_riva_streets = arcpy.Select_analysis(
+            in_features=hrm_owned_streets,
+            out_feature_class=os.path.join(local_gdb, "hrm_owned_new_riva_streets")
+        )[0]
+
         # Get all TRN_streets_hrm that are NOT already in current trn_street_riva
-        # Remove any records in trn_street_new_streets_riva (copy of HRM streets) if FDMID is in TRN_STREET_RIVA
+        # Remove any records in hrm_owned_new_riva_streets (copy of HRM streets) if FDMID is in TRN_STREET_RIVA
         print("\nFinding rows in hrm streets currently already in RIVA and deleting...")
-        with arcpy.da.UpdateCursor(trn_street_new_streets_riva, ["FDMID", ]) as cursor:
+        with arcpy.da.UpdateCursor(hrm_owned_new_riva_streets, ["FDMID", ]) as cursor:
 
             for row in cursor:
 
-                if row[0] in current_trn_street_riva_fdmids:
+                if row[0] in non_retired_riva_fdmids:
                     cursor.deleteRow()
                     print(f"\tDeleted FDMID: {row[0]}")
 
-        # Open the attribute table for the trn_street_new_streets_riva
+        # Open the attribute table for the hrm_owned_new_riva_streets
         # Export records to a table in the file geodatabase called TBL_new_streets_for_riva
-        print("Exporting records to a table in the file geodatabase called TBL_new_streets_for_riva...")
+        print("Exporting records to a table in the file geodatabase called new_streets_for_riva...")
         tbl_new_streets_for_riva = arcpy.ExportTable_conversion(
-            trn_street_new_streets_riva,
-            os.path.join(local_gdb, "TBL_new_streets_for_riva")
+            hrm_owned_new_riva_streets,
+            os.path.join(local_gdb, "new_streets_for_riva")
         )[0]
 
         # APPEND
+        trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
+
         print(f"\nAppending new streets into RIVA table...")
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
@@ -110,6 +100,7 @@ def step_one_new_hrm_streets():
         return trn_street_riva_copy, local_gdb
 
     except Exception as e:
+        print(e)
         raise RuntimeError(f"step_one_new_hrm_streets failed: {e}") from e
 
 
@@ -139,10 +130,12 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
 
     # FDMIDs in RIVA not yet retired that are absent from TRN_STREET
     riva_retired_fdmids = set()
+
     for row in arcpy.da.SearchCursor(trn_street_riva, ["FDMID"], "DATE_RET IS NULL"):
 
         fdmid = row[0]
         if fdmid not in trn_street_fdmids:
+
             riva_retired_fdmids.add(fdmid)
 
     if not riva_retired_fdmids:
@@ -160,7 +153,9 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
         "TO_DATE IS NOT NULL AND FDMID IS NOT NULL"
     ):
         fdmid, to_date, old_fdmid, shape_length, route_id = row
+
         if fdmid in riva_retired_fdmids and fdmid not in retired_data:
+
             retired_data[fdmid] = {
                 'date_ret': to_date,
                 'old_fdmid': old_fdmid,
@@ -190,13 +185,7 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
 
 def step_three_updating_existing(trn_street_riva):
     """
-
-    :param trn_street_riva:
-    :return:
-    """
-
-    print("\nStep 3: Updating Existing Streets...")
-
+    From original documentation:
     # •	Create a join between TRN_STREET_RIVA and TRN_street using FDMID as common attribute, and only keep matching records
     # •	Select all records in TRN_street_riva
     # •	Remove from Selection set records where TRN_street_riva.ret_date IS NOT NULL.
@@ -204,14 +193,25 @@ def step_three_updating_existing(trn_street_riva):
     #       TRN_street_riva.shape.length = TRN_street.shape.length
     #       (Seems that this can only be done when using a copy of TRN_street that has been saved to a FGDB)
     # •	Note - It is rare to have segments length match, it is normal for all segments to have the following calcs done..
+    :param trn_street_riva:
+    :return:
+    """
+
+    print("\nStep 3: Updating Existing Streets...")
 
     trn_street_fdmids = {
         x[0]: {
-            'shape_length': x[1], 'full_name': x[2], 'from_str': x[3], 'to_str': x[4], 'gsa_left': x[5],
-            'old_fdmid': x[6], 'date_act': x[7], 'sys_date': x[8]
+            'shape_length': x[1],
+            'full_name': x[2],
+            'from_str': x[3],
+            'to_str': x[4],
+            'gsa_left': x[5],
+            'old_fdmid': x[6],
+            'date_act': x[7],
+            'sys_date': x[8]
         } for x in arcpy.da.SearchCursor(
             TRNLRS_TRN_STREET_VW,
-            ["FDMID", "SHAPE@LENGTH", "FULL_NAME", "FROM_STR", "TO_STR", "GSA_LEFT", "OLD_FDMID", "DATE_ACT", "SYS_DATE"],
+            ["FDMID", "SHAPE@LENGTH", "FULL_NAME", "FROM_STR", "TO_STR", "GSA_LEFT", "OLD_FDMID", "ADDDATE", "MODDATE"],
         )
     }
 
@@ -224,13 +224,14 @@ def step_three_updating_existing(trn_street_riva):
         for row in cursor:
 
             fdmid = row[0]
-            shape_length = row[1]
+            local_riva_shape_length = row[1]
 
             if fdmid in trn_street_fdmids:
+
                 trn_street_row_info = trn_street_fdmids.get(fdmid)
                 trn_street_len = trn_street_row_info['shape_length']
 
-                if trn_street_len == shape_length:
+                if trn_street_len == local_riva_shape_length:
                     continue  # Note - It is rare to have segments length match.
 
                 full_name = trn_street_row_info['full_name']
@@ -264,12 +265,13 @@ def step_three_updating_existing(trn_street_riva):
                 # •	Update the DATE_REV in TRN_street_riva for records updated
 
 
-def step_four_validation_review(local_gdb):
+def step_four_validation_review(local_gdb: str, riva_feature: str):
     """
     QA review of net new streets inserted in step 1.
     Reads TBL_new_streets_for_riva and reports null/blank counts for
     SHORT_DESC, LONG_DESC, and DATE_REV — fields that must not be empty.
     """
+
     print("\nStep 4: Validation Review of Net New Streets...")
 
     tbl = os.path.join(local_gdb, "TBL_new_streets_for_riva")
@@ -282,12 +284,13 @@ def step_four_validation_review(local_gdb):
     null_counts = {f: 0 for f in fields}
     total = 0
 
-    for row in arcpy.da.SearchCursor(tbl, fields):
+    for row in arcpy.da.SearchCursor(riva_feature, fields):
+
         total += 1
-        
+
         for i, field in enumerate(fields):
             val = row[i]
-            
+
             if val is None or (isinstance(val, str) and val.strip() == ""):
                 null_counts[field] += 1
 
@@ -302,8 +305,19 @@ def step_four_validation_review(local_gdb):
 
 if __name__ == "__main__":
 
+    # Create local workspace
+    local_gdb = os.path.join(SCRIPTS_DIR, "scratch.gdb")
+
+    if not arcpy.Exists(local_gdb):
+        print("Creating local geodatabase...")
+
+        utils.create_fgdb(
+            out_folder_path=SCRIPTS_DIR,
+            out_name="scratch.gdb"
+        )
+
     # STEP 1
-    trn_street_riva_local, local_workspace = step_one_new_hrm_streets()
+    trn_street_riva_local, local_workspace = step_one_new_hrm_streets(local_gdb=local_gdb)
 
     # STEP 2
     step_two_update_retired_streets(trn_street_riva_local, local_workspace)
@@ -312,7 +326,7 @@ if __name__ == "__main__":
     step_three_updating_existing(trn_street_riva_local)
 
     # STEP 4
-    step_four_validation_review(local_workspace)
+    step_four_validation_review(local_workspace, trn_street_riva_local)
 
     # input("Truncate and load RW")
     # input("Truncate and load ASSET_ACCOUNTING.TRN_STREET_RIVA")
