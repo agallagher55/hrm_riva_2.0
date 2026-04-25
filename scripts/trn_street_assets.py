@@ -10,12 +10,14 @@ arcpy.SetLogHistory(False)
 arcpy.env.overwriteOutput = True
 
 SDE = r"E:\HRM\Scripts\SDE\SQL\qa_RW_sdeadm.sde"
+ASSET_ACCOUNTING_SDE = r"E:\HRM\Scripts\SDE\SQL\qa_RW_asset_accounting.sde"
 
 TRNLRS_TRN_STREET_VW = os.path.join(SDE, "SDEADM.TRNLRS_TRN_STREET_VW")
 TRNLRS_SEGMENTED = os.path.join(SDE, "SDEADM.TRNLRS_segmented_street_events")
 E_STREET_STATUS = os.path.join(SDE, "SDEADM.TRNLRS", "SDEADM.E_StreetStatus")
 
 TRN_STREET_RIVA = os.path.join(SDE, "SDEADM.TRN_STREET_RIVA")
+AA_TRN_STREET_RIVA = os.path.join(ASSET_ACCOUNTING_SDE, "ASSET_ACCOUNTING.TRN_STREET_RIVA")
 
 PROJECT_DIR = os.path.dirname(os.getcwd())
 SCRIPTS_DIR = os.path.join(PROJECT_DIR, "scripts")
@@ -303,6 +305,40 @@ def step_four_validation_review(local_gdb: str, riva_feature: str):
     return null_counts
 
 
+def step_five_truncate_load_asset_accounting(source_riva: str = None):
+    """
+    Truncate ASSET_ACCOUNTING.TRN_STREET_RIVA and reload from SDEADM.TRN_STREET_RIVA
+    (or a supplied local copy produced by steps 1–3).
+    """
+    if source_riva is None:
+        source_riva = TRN_STREET_RIVA
+
+    target = AA_TRN_STREET_RIVA
+
+    try:
+        print("\nStep 5: Truncate and Load ASSET_ACCOUNTING.TRN_STREET_RIVA...")
+
+        print(f"  Truncating {target}...")
+        arcpy.TruncateTable_management(target)
+        print("  Table truncated.")
+
+        print(f"  Appending records from {source_riva}...")
+        arcpy.Append_management(
+            inputs=source_riva,
+            target=target,
+            schema_type="NO_TEST"
+        )
+
+        count = int(arcpy.GetCount_management(target)[0])
+        print(f"  Load complete — {count} records in ASSET_ACCOUNTING.TRN_STREET_RIVA.")
+
+        return target
+
+    except Exception as e:
+        print(e)
+        raise RuntimeError(f"step_five_truncate_load_asset_accounting failed: {e}") from e
+
+
 if __name__ == "__main__":
 
     # Create local workspace
@@ -329,4 +365,4 @@ if __name__ == "__main__":
     step_four_validation_review(local_workspace, new_riva_streets)
 
     # input("Truncate and load RW")
-    # input("Truncate and load ASSET_ACCOUNTING.TRN_STREET_RIVA")
+    step_five_truncate_load_asset_accounting(source_riva=new_riva_streets)
