@@ -361,3 +361,5 @@ if __name__ == "__main__":
 
     # input("Truncate and load RW")
     step_five_truncate_load_asset_accounting(source_riva=new_riva_streets)
+    
+    # Truncate and load RO
