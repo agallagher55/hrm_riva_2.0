@@ -51,7 +51,7 @@ def step_one_new_hrm_streets(local_gdb: str):
             out_feature_class=os.path.join(local_gdb, "TRN_street_HRMowned"),
             where_clause=hrm_streets_filter
         )[0]
-        
+
         # Select in TRN_STREET_RIVA all records AND
         # Remove from current selection all records where DATE_RET IS NOT NULL
         print("\nFiltering TRN_STREET_RIVA for non-retired street FDMIDs...")
@@ -104,9 +104,10 @@ def step_one_new_hrm_streets(local_gdb: str):
         raise RuntimeError(f"step_one_new_hrm_streets failed: {e}") from e
 
 
-def step_two_update_retired_streets(trn_street_riva, local_gdb):
+def step_two_update_retired_streets(new_riva_streets):
 
     """
+    Update retired streets in set of RIVA streets to be added to RIVA streets table
     - TRN_STREET_RIVA
     - TRNLRS_TRN_STREET_VW
 
@@ -115,32 +116,29 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
 
     print("\nStarting Step 2: Updating Retired Streets...")
 
-    # Build DATE_ACCEPT lookup from E_StreetStatus keyed by ROUTE_ID (used as DATE_ACT)
-    print("Building DATE_ACCEPT lookup from E_StreetStatus...")
-    street_status_date_accept = {}
-
-    for row in arcpy.da.SearchCursor(E_STREET_STATUS, ["ROUTEID", "DATE_ACCEPT"]):
-        routeid, date_accept = row
-
-        if routeid not in street_status_date_accept:
-            street_status_date_accept[routeid] = date_accept
-
     print("Getting records in TRN_STREET_RIVA that are no longer in TRN_STREET...")
     trn_street_fdmids = set(x[0] for x in arcpy.da.SearchCursor(TRNLRS_TRN_STREET_VW, ['FDMID']))
 
     # FDMIDs in RIVA not yet retired that are absent from TRN_STREET
-    riva_retired_fdmids = set()
+    not_retired_filter = "DATE_RET IS NULL"
 
-    for row in arcpy.da.SearchCursor(trn_street_riva, ["FDMID"], "DATE_RET IS NULL"):
-
-        fdmid = row[0]
-        if fdmid not in trn_street_fdmids:
-
-            riva_retired_fdmids.add(fdmid)
+    riva_retired_fdmids = {
+        row[0]
+        for row in arcpy.da.SearchCursor(new_riva_streets, ["FDMID"], not_retired_filter)
+        if row[0] not in trn_street_fdmids
+    }
 
     if not riva_retired_fdmids:
         print("No new retired streets to update.")
         return
+
+    # Build DATE_ACCEPT lookup from E_StreetStatus keyed by ROUTE_ID (used as DATE_ACT)
+    print("Building DATE_ACCEPT lookup from E_StreetStatus...")
+
+    street_status_date_accept = {
+        route_id: date_accept
+        for route_id, date_accept in arcpy.da.SearchCursor(E_STREET_STATUS, ["ROUTEID", "DATE_ACCEPT"])
+    }
 
     # Pull retirement data from TRNLRS_segmented_street_events for matching FDMIDs.
     # TO_DATE IS NOT NULL = retired in LRS; ROUTE_ID links to E_StreetStatus.ROUTEID.
@@ -164,7 +162,7 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
             }
 
     with arcpy.da.UpdateCursor(
-        trn_street_riva,
+        new_riva_streets,
         ["FDMID", "DATE_RET", "DATE_REV", "OLD_FDMID", "SHAPE_LENGTH", "DATE_ACT"]
     ) as cursor:
 
@@ -183,7 +181,9 @@ def step_two_update_retired_streets(trn_street_riva, local_gdb):
                 print(f"\tUpdated FDMID: {fdmid}")
 
 
-def step_three_updating_existing(trn_street_riva):
+    # TODO: Create feature of retired streets
+
+def step_three_updating_existing_riva_streets(trn_street_riva):
     """
     From original documentation:
     # •	Create a join between TRN_STREET_RIVA and TRN_street using FDMID as common attribute, and only keep matching records
@@ -316,17 +316,17 @@ if __name__ == "__main__":
             out_name="scratch.gdb"
         )
 
-    # STEP 1
-    trn_street_riva_local, local_workspace = step_one_new_hrm_streets(local_gdb=local_gdb)
+    # STEP 1: Get new streets to be added to RIVA
+    new_riva_streets, local_workspace = step_one_new_hrm_streets(local_gdb=local_gdb)
 
     # STEP 2
-    step_two_update_retired_streets(trn_street_riva_local, local_workspace)
+    step_two_update_retired_streets(new_riva_streets)
 
     # STEP 3
-    step_three_updating_existing(trn_street_riva_local)
+    step_three_updating_existing_riva_streets(new_riva_streets)
 
     # STEP 4
-    step_four_validation_review(local_workspace, trn_street_riva_local)
+    step_four_validation_review(local_workspace, new_riva_streets)
 
     # input("Truncate and load RW")
     # input("Truncate and load ASSET_ACCOUNTING.TRN_STREET_RIVA")
