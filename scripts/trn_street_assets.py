@@ -89,16 +89,19 @@ def step_one_new_hrm_streets(local_gdb: str):
         arcpy.AddField_management(tbl_new_streets_for_riva, "LONG_DESC", "TEXT", field_length=255)
 
         with arcpy.da.UpdateCursor(
-            tbl_new_streets_for_riva,
-            ["FULL_NAME", "FROM_STR", "TO_STR", "GSA_LEFT", "SHORT_DESC", "LONG_DESC"]
+                tbl_new_streets_for_riva,
+                ["FULL_NAME", "FROM_STR", "TO_STR", "GSA_LEFT", "SHORT_DESC", "LONG_DESC"]
         ) as cursor:
+            
             for row in cursor:
+                
                 full_name = row[0] or ""
-                from_str  = row[1] or ""
-                to_str    = row[2] or ""
-                gsa_left  = row[3] or ""
+                from_str = row[1] or ""
+                to_str = row[2] or ""
+                gsa_left = row[3] or ""
                 row[4] = f"{full_name} ({from_str} TO {to_str})"
                 row[5] = f"{full_name} ({gsa_left})"
+                
                 cursor.updateRow(row)
 
         # Build FieldMappings: load all source fields as pass-throughs, then override
@@ -108,18 +111,22 @@ def step_one_new_hrm_streets(local_gdb: str):
         field_mappings.addTable(tbl_new_streets_for_riva)
 
         field_renames = {
-            "FROM_STR":   "FROM_STREET",
-            "TO_STR":     "TO_STREET",
-            "GSA_LEFT":   "GSA_NAME",
-            "ADDDATE":    "DATE_ACT",
-            "MODDATE":    "SYS_DATE",
-            "ST_CLASS":   "PST_CLASS",
+            "FROM_STR": "FROM_STREET",
+            "TO_STR": "TO_STREET",
+            "GSA_LEFT": "GSA_NAME",
+            "ADDDATE": "DATE_ACT",
+            "MODDATE": "SYS_DATE",
+            "ST_CLASS": "PST_CLASS",
             "STR_CODE_L": "STR_CODE",
         }
+        
         for source_name, target_name in field_renames.items():
+            
             idx = field_mappings.findFieldMapIndex(source_name)
+            
             if idx == -1:
                 continue
+                
             fm = field_mappings.getFieldMap(idx)
             out_field = fm.outputField
             out_field.name = target_name
@@ -352,7 +359,7 @@ def step_five_truncate_load_asset_accounting(source_riva: str = None):
     Truncate ASSET_ACCOUNTING.TRN_STREET_RIVA and reload from SDEADM.TRN_STREET_RIVA
     (or a supplied local copy produced by steps 1–3).
     """
-    
+
     target = AA_TRN_STREET_RIVA
 
     try:
@@ -406,5 +413,5 @@ if __name__ == "__main__":
 
     # input("Truncate and load RW")
     step_five_truncate_load_asset_accounting(source_riva=new_riva_streets)
-    
+
     # Truncate and load RO
