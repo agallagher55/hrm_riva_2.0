@@ -82,6 +82,50 @@ def step_one_new_hrm_streets(local_gdb: str):
             os.path.join(local_gdb, "new_streets_for_riva")
         )[0]
 
+        # SHORT_DESC and LONG_DESC are absent from the source — add and compute them
+        # before building the field mapping so addTable picks them up.
+        print("\nAdding and computing SHORT_DESC and LONG_DESC...")
+        arcpy.AddField_management(tbl_new_streets_for_riva, "SHORT_DESC", "TEXT", field_length=255)
+        arcpy.AddField_management(tbl_new_streets_for_riva, "LONG_DESC", "TEXT", field_length=255)
+
+        with arcpy.da.UpdateCursor(
+            tbl_new_streets_for_riva,
+            ["FULL_NAME", "FROM_STR", "TO_STR", "GSA_LEFT", "SHORT_DESC", "LONG_DESC"]
+        ) as cursor:
+            for row in cursor:
+                full_name = row[0] or ""
+                from_str  = row[1] or ""
+                to_str    = row[2] or ""
+                gsa_left  = row[3] or ""
+                row[4] = f"{full_name} ({from_str} TO {to_str})"
+                row[5] = f"{full_name} ({gsa_left})"
+                cursor.updateRow(row)
+
+        # Build FieldMappings: load all source fields as pass-throughs, then override
+        # the output name for fields whose source name differs from the target name.
+        print("\nBuilding field mappings for append...")
+        field_mappings = arcpy.FieldMappings()
+        field_mappings.addTable(tbl_new_streets_for_riva)
+
+        field_renames = {
+            "FROM_STR":   "FROM_STREET",
+            "TO_STR":     "TO_STREET",
+            "GSA_LEFT":   "GSA_NAME",
+            "ADDDATE":    "DATE_ACT",
+            "MODDATE":    "SYS_DATE",
+            "ST_CLASS":   "PST_CLASS",
+            "STR_CODE_L": "STR_CODE",
+        }
+        for source_name, target_name in field_renames.items():
+            idx = field_mappings.findFieldMapIndex(source_name)
+            if idx == -1:
+                continue
+            fm = field_mappings.getFieldMap(idx)
+            out_field = fm.outputField
+            out_field.name = target_name
+            fm.outputField = out_field
+            field_mappings.replaceFieldMap(idx, fm)
+
         # APPEND
         trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
 
@@ -96,7 +140,8 @@ def step_one_new_hrm_streets(local_gdb: str):
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
             target=trn_street_riva_copy,
-            schema_type="NO_TEST"  # STR_CODE yields to null
+            schema_type="NO_TEST",
+            field_mapping=field_mappings
         )
 
         return trn_street_riva_copy, local_gdb
