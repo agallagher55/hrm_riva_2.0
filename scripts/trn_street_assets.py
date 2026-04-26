@@ -148,6 +148,20 @@ def step_one_new_hrm_streets(local_gdb: str):
             fm.addInputField(tbl_new_streets_for_riva, source_name)
             field_mappings.replaceFieldMap(idx, fm)
 
+        # Also wire same-name fields — addTable(target) loads target slots with no
+        # inputs, so without this, fields like FDMID default to 0 instead of mapping
+        # from the source.
+        renamed_sources = set(field_renames.keys())
+        for field in arcpy.ListFields(tbl_new_streets_for_riva):
+            if field.name in renamed_sources:
+                continue  # Already handled via field_renames above
+            idx = field_mappings.findFieldMapIndex(field.name)
+            if idx == -1:
+                continue  # Field not present in target
+            fm = field_mappings.getFieldMap(idx)
+            fm.addInputField(tbl_new_streets_for_riva, field.name)
+            field_mappings.replaceFieldMap(idx, fm)
+
         print(f"\nAppending new streets into RIVA table...")
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
