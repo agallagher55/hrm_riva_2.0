@@ -127,9 +127,9 @@ def step_one_new_hrm_streets(local_gdb: str):
         field_mappings = arcpy.FieldMappings()
         field_mappings.addTable(trn_street_riva_copy)
 
+        # FROM_STREET and TO_STREET in TRN_STREET_RIVA are Long (integer) fields —
+        # they are not populated from FROM_STR/TO_STR (text) during the RIVA load.
         field_renames = {
-            "FROM_STR": "FROM_STREET",
-            "TO_STR": "TO_STREET",
             "GSA_LEFT": "GSA_NAME",
             "ADDDATE": "DATE_ACT",
             "MODDATE": "SYS_DATE",
