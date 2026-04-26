@@ -8,7 +8,9 @@ This is a **GIS ETL pipeline** for Halifax Regional Municipality (HRM) that sync
 
 > **Note:** The pipeline was originally built against `SDEADM.TRN_STREET`. Following the transition to a Linear Referencing System (LRS), this has been replaced by `SDEADM.TRNLRS_TRN_STREET_VW`, which is an almost 1-to-1 replacement. All scripts now reference `TRNLRS_TRN_STREET_VW` as the street source.
 
-The pipeline requires **ArcGIS Pro with the Location Referencing Extension** and a valid SDE connection. It cannot run without this environment.
+The pipeline requires **ArcGIS Pro 3.3.5 with the Location Referencing Extension** and a valid SDE connection to a **Microsoft SQL Server enterprise geodatabase**. It cannot run without this environment.
+
+> **ArcPy compatibility note:** ArcGIS Pro 3.3.x does not support `schema_type="FIELD_MAPPING_ONLY"` in `arcpy.Append_management`. Use `schema_type="NO_TEST"` with a `FieldMappings` object built from the target table (via `addTable(target)` + `addInputField()`) to handle field renames.
 
 ## Running the Pipeline
 
