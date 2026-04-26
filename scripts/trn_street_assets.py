@@ -66,13 +66,18 @@ def step_one_new_hrm_streets(local_gdb: str):
         # Get all TRN_streets_hrm that are NOT already in current trn_street_riva
         # Remove any records in hrm_owned_new_riva_streets (copy of HRM streets) if FDMID is in TRN_STREET_RIVA
         print("\nFinding rows in hrm streets currently already in RIVA and deleting...")
+        
+        count = 0
+        
         with arcpy.da.UpdateCursor(hrm_owned_new_riva_streets, ["FDMID", ]) as cursor:
 
             for row in cursor:
 
                 if row[0] in non_retired_riva_fdmids:
                     cursor.deleteRow()
-                    print(f"\tDeleted FDMID: {row[0]}")
+                    count += 1
+                    
+        print(f"\tDeleted {count} FDMIDs.")
 
         # Open the attribute table for the hrm_owned_new_riva_streets
         # Export records to a table in the file geodatabase called TBL_new_streets_for_riva
@@ -92,16 +97,16 @@ def step_one_new_hrm_streets(local_gdb: str):
                 tbl_new_streets_for_riva,
                 ["FULL_NAME", "FROM_STR", "TO_STR", "GSA_LEFT", "SHORT_DESC", "LONG_DESC"]
         ) as cursor:
-            
+
             for row in cursor:
-                
+
                 full_name = row[0] or ""
                 from_str = row[1] or ""
                 to_str = row[2] or ""
                 gsa_left = row[3] or ""
                 row[4] = f"{full_name} ({from_str} TO {to_str})"
                 row[5] = f"{full_name} ({gsa_left})"
-                
+
                 cursor.updateRow(row)
 
         # Build FieldMappings: load all source fields as pass-throughs, then override
@@ -119,14 +124,14 @@ def step_one_new_hrm_streets(local_gdb: str):
             "ST_CLASS": "PST_CLASS",
             "STR_CODE_L": "STR_CODE",
         }
-        
+
         for source_name, target_name in field_renames.items():
-            
+
             idx = field_mappings.findFieldMapIndex(source_name)
-            
+
             if idx == -1:
                 continue
-                
+
             fm = field_mappings.getFieldMap(idx)
             out_field = fm.outputField
             out_field.name = target_name
