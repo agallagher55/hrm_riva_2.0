@@ -109,11 +109,23 @@ def step_one_new_hrm_streets(local_gdb: str):
 
                 cursor.updateRow(row)
 
-        # Build FieldMappings: load all source fields as pass-throughs, then override
-        # the output name for fields whose source name differs from the target name.
+        # APPEND
+        trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
+
+        # Export TRN_STREET_RIVA to local workspace before building field mappings
+        # so the target table exists when addTable() is called.
+        print("\nExporting TRN_STREET_RIVA to local workspace...")
+        arcpy.TableToGeodatabase_conversion(
+            Input_Table=TRN_STREET_RIVA,
+            Output_Geodatabase=local_gdb
+        )
+
+        # Build FieldMappings from the target, then wire each renamed source field
+        # into the correct target field slot. Same-name fields are matched automatically
+        # by NO_TEST without needing explicit entries.
         print("\nBuilding field mappings for append...")
         field_mappings = arcpy.FieldMappings()
-        field_mappings.addTable(tbl_new_streets_for_riva)
+        field_mappings.addTable(trn_street_riva_copy)
 
         field_renames = {
             "FROM_STR": "FROM_STREET",
@@ -127,32 +139,20 @@ def step_one_new_hrm_streets(local_gdb: str):
 
         for source_name, target_name in field_renames.items():
 
-            idx = field_mappings.findFieldMapIndex(source_name)
+            idx = field_mappings.findFieldMapIndex(target_name)
 
             if idx == -1:
                 continue
 
             fm = field_mappings.getFieldMap(idx)
-            out_field = fm.outputField
-            out_field.name = target_name
-            fm.outputField = out_field
+            fm.addInputField(tbl_new_streets_for_riva, source_name)
             field_mappings.replaceFieldMap(idx, fm)
-
-        # APPEND
-        trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
-
-        # Export TRN_STREET_RIVA to local workspace for backup purposes
-        print("\nExporting TRN_STREET_RIVA to local workspace...")
-        arcpy.TableToGeodatabase_conversion(
-            Input_Table=TRN_STREET_RIVA,
-            Output_Geodatabase=local_gdb
-        )
 
         print(f"\nAppending new streets into RIVA table...")
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
             target=trn_street_riva_copy,
-            schema_type="FIELD_MAPPING_ONLY",
+            schema_type="NO_TEST",
             field_mapping=field_mappings
         )
 
