@@ -152,7 +152,7 @@ def step_one_new_hrm_streets(local_gdb: str):
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
             target=trn_street_riva_copy,
-            schema_type="NO_TEST",
+            schema_type="FIELD_MAPPING_ONLY",
             field_mapping=field_mappings
         )
 
