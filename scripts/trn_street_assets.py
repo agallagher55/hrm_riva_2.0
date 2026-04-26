@@ -82,6 +82,41 @@ def step_one_new_hrm_streets(local_gdb: str):
             os.path.join(local_gdb, "new_streets_for_riva")
         )[0]
 
+        # Align source field names to match TRN_STREET_RIVA before appending.
+        # Append uses NO_TEST (name-based matching), so source fields with different
+        # names must be renamed here or they will be silently dropped.
+        print("\nAligning source field names to match TRN_STREET_RIVA schema...")
+        field_renames = [
+            ("FROM_STR",    "FROM_STREET"),
+            ("TO_STR",      "TO_STREET"),
+            ("GSA_LEFT",    "GSA_NAME"),
+            ("ADDDATE",     "DATE_ACT"),
+            ("MODDATE",     "SYS_DATE"),
+            ("ST_CLASS",    "PST_CLASS"),
+            ("STR_CODE_L",  "STR_CODE"),
+        ]
+        for old_name, new_name in field_renames:
+            arcpy.AlterField_management(tbl_new_streets_for_riva, old_name, new_name)
+            print(f"\tRenamed {old_name} -> {new_name}")
+
+        # SHORT_DESC and LONG_DESC do not exist on the source — add and compute them.
+        print("\nAdding and computing SHORT_DESC and LONG_DESC...")
+        arcpy.AddField_management(tbl_new_streets_for_riva, "SHORT_DESC", "TEXT", field_length=255)
+        arcpy.AddField_management(tbl_new_streets_for_riva, "LONG_DESC", "TEXT", field_length=255)
+
+        with arcpy.da.UpdateCursor(
+            tbl_new_streets_for_riva,
+            ["FULL_NAME", "FROM_STREET", "TO_STREET", "GSA_NAME", "SHORT_DESC", "LONG_DESC"]
+        ) as cursor:
+            for row in cursor:
+                full_name   = row[0] or ""
+                from_street = row[1] or ""
+                to_street   = row[2] or ""
+                gsa_name    = row[3] or ""
+                row[4] = f"{full_name} ({from_street} TO {to_street})"
+                row[5] = f"{full_name} ({gsa_name})"
+                cursor.updateRow(row)
+
         # APPEND
         trn_street_riva_copy = os.path.join(local_gdb, 'TRN_STREET_RIVA')
 
@@ -96,7 +131,7 @@ def step_one_new_hrm_streets(local_gdb: str):
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
             target=trn_street_riva_copy,
-            schema_type="NO_TEST"  # STR_CODE yields to null
+            schema_type="NO_TEST"
         )
 
         return trn_street_riva_copy, local_gdb
