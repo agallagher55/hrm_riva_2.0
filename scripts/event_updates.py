@@ -15,8 +15,8 @@ def update_riva_from_event_table(
 
     Join path:
         TRN_STREET_RIVA.FDMID
-        → segmented_table (FDMID, ROUTE_ID, FROMMEASURE, TOMEASURE)
-        → event_table     (ROUTEID, FROMMEASURE, TOMEASURE, <event_field>)
+        → segmented_table (FDMID, ROUTE_ID, FROM_MEASURE, TO_MEASURE)
+        → event_table     (ROUTEID, FROM_MEASURE, TO_MEASURE, <event_field>)
 
     When multiple events overlap a RIVA segment the event with the greatest
     measure overlap wins.  Assumes segmented_table uses ROUTE_ID (not ROUTEID)
@@ -61,7 +61,7 @@ def update_riva_from_event_table(
     print(f"  Reading '{event_field}' from {event_table}...")
     for row in arcpy.da.SearchCursor(
         event_table,
-        ["ROUTEID", "FROMMEASURE", "TOMEASURE", event_field],
+        ["ROUTEID", "FROM_MEASURE", "TO_MEASURE", event_field],
         where,
     ):
         route_id, from_m, to_m, value = row
