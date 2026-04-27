@@ -66,9 +66,9 @@ def step_one_new_hrm_streets(local_gdb: str):
         # Get all TRN_streets_hrm that are NOT already in current trn_street_riva
         # Remove any records in hrm_owned_new_riva_streets (copy of HRM streets) if FDMID is in TRN_STREET_RIVA
         print("\nFinding rows in hrm streets currently already in RIVA and deleting...")
-        
+
         count = 0
-        
+
         with arcpy.da.UpdateCursor(hrm_owned_new_riva_streets, ["FDMID", ]) as cursor:
 
             for row in cursor:
@@ -76,7 +76,7 @@ def step_one_new_hrm_streets(local_gdb: str):
                 if row[0] in non_retired_riva_fdmids:
                     cursor.deleteRow()
                     count += 1
-                    
+
         print(f"\tDeleted {count} FDMIDs.")
 
         # Open the attribute table for the hrm_owned_new_riva_streets
@@ -99,7 +99,6 @@ def step_one_new_hrm_streets(local_gdb: str):
         ) as cursor:
 
             for row in cursor:
-
                 full_name = row[0] or ""
                 from_str = row[1] or ""
                 to_str = row[2] or ""
@@ -153,11 +152,15 @@ def step_one_new_hrm_streets(local_gdb: str):
         # from the source.
         renamed_sources = set(field_renames.keys())
         for field in arcpy.ListFields(tbl_new_streets_for_riva):
+
             if field.name in renamed_sources:
                 continue  # Already handled via field_renames above
+
             idx = field_mappings.findFieldMapIndex(field.name)
+
             if idx == -1:
                 continue  # Field not present in target
+
             fm = field_mappings.getFieldMap(idx)
             fm.addInputField(tbl_new_streets_for_riva, field.name)
             field_mappings.replaceFieldMap(idx, fm)
@@ -209,7 +212,9 @@ def step_two_update_retired_streets(new_riva_streets):
 
     street_status_date_accept = {
         route_id: date_accept
-        for route_id, date_accept in arcpy.da.SearchCursor(E_STREET_STATUS, ["ROUTEID", "DATE_ACCEPT"])
+        for route_id, date_accept in arcpy.da.SearchCursor(
+            E_STREET_STATUS, ["ROUTEID", "DATE_ACCEPT"], "TODATE IS NULL"
+        )
     }
 
     # Pull retirement data from TRNLRS_segmented_street_events for matching FDMIDs.
@@ -225,6 +230,7 @@ def step_two_update_retired_streets(new_riva_streets):
         fdmid, to_date, old_fdmid, shape_length, route_id = row
 
         if fdmid in riva_retired_fdmids and fdmid not in retired_data:
+            
             retired_data[fdmid] = {
                 'date_ret': to_date,
                 'old_fdmid': old_fdmid,
@@ -241,12 +247,14 @@ def step_two_update_retired_streets(new_riva_streets):
             fdmid = row[0]
 
             if fdmid in retired_data:
+                
                 data = retired_data[fdmid]
                 row[1] = data['date_ret']
                 row[2] = datetime.today()
                 row[3] = data['old_fdmid']
                 row[4] = data['shape_length']
                 row[5] = data['date_act']
+                
                 cursor.updateRow(row)
                 print(f"\tUpdated FDMID: {fdmid}")
 
