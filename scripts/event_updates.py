@@ -61,7 +61,7 @@ def update_riva_from_event_table(
     print(f"  Reading '{event_field}' from {event_table}...")
     for row in arcpy.da.SearchCursor(
         event_table,
-        ["ROUTEID", "FROM_MEASURE", "TO_MEASURE", event_field],
+        ["ROUTEID", "FROMMEASURE", "TOMEASURE", event_field],
         where,
     ):
         route_id, from_m, to_m, value = row
