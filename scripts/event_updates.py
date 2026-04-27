@@ -46,7 +46,9 @@ def update_riva_from_event_table(
         ["FDMID", "ROUTE_ID", "FROMMEASURE", "TOMEASURE"],
         "FDMID IS NOT NULL AND TO_DATE IS NULL",
     ):
+        
         fdmid, route_id, from_m, to_m = row
+        
         if fdmid not in fdmid_lookup:
             fdmid_lookup[fdmid] = (route_id, from_m or 0.0, to_m or 0.0)
 
@@ -65,6 +67,7 @@ def update_riva_from_event_table(
         route_id, from_m, to_m, value = row
         if value is None:
             continue
+            
         route_events.setdefault(route_id, []).append((from_m or 0.0, to_m or 0.0, value))
 
     print(f"  {sum(len(v) for v in route_events.values())} active event records read.")
@@ -74,15 +77,18 @@ def update_riva_from_event_table(
     updated = 0
 
     with arcpy.da.UpdateCursor(riva_fc, ["FDMID", target_field], riva_filter) as cursor:
+        
         for row in cursor:
             fdmid = row[0]
 
             seg = fdmid_lookup.get(fdmid)
+            
             if not seg:
                 continue
 
             route_id, seg_from, seg_to = seg
             events = route_events.get(route_id, [])
+            
             if not events:
                 continue
 
@@ -92,11 +98,13 @@ def update_riva_from_event_table(
 
             for ev_from, ev_to, value in events:
                 overlap = min(seg_to, ev_to) - max(seg_from, ev_from)
+                
                 if overlap > best_overlap:
                     best_overlap = overlap
                     best_value = value
 
             if best_value is not None and best_overlap > 0:
+                
                 row[1] = best_value
                 cursor.updateRow(row)
                 updated += 1
