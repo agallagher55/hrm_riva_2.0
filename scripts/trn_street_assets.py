@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 
 from gispy import utils
+from event_updates import update_riva_from_event_table
 
 # Settings
 arcpy.SetLogHistory(False)
@@ -17,6 +18,9 @@ E_STREET_STATUS = os.path.join(SDE, "SDEADM.TRNLRS", "SDEADM.E_StreetStatus")
 
 TRN_STREET_RIVA = os.path.join(SDE, "SDEADM.TRN_STREET_RIVA")
 AA_TRN_STREET_RIVA = os.path.join(SDE, "ASSET_ACCOUNTING.TRN_STREET_RIVA")
+
+# LRS event tables — attributes not included in TRNLRS_TRN_STREET_VW dynamic segmentation
+E_WIDTH = os.path.join(SDE, "SDEADM.TRNLRS", "SDEADM.E_Width")
 
 PROJECT_DIR = os.path.dirname(os.getcwd())
 SCRIPTS_DIR = os.path.join(PROJECT_DIR, "scripts")
@@ -434,6 +438,15 @@ if __name__ == "__main__":
 
     # STEP 3
     step_three_updating_existing_riva_streets(new_riva_streets)
+
+    # STEP 3b: Populate event-table attributes not carried by TRNLRS_TRN_STREET_VW
+    # update_riva_from_event_table(
+    #     riva_fc=new_riva_streets,
+    #     event_table=E_WIDTH,
+    #     event_field="Width",
+    #     target_field="PAVE_WIDTH",
+    #     segmented_table=TRNLRS_SEGMENTED,
+    # )
 
     # STEP 4
     step_four_validation_review(local_workspace, new_riva_streets)
