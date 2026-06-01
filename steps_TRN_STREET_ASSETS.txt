@@ -11,7 +11,9 @@ ASSET_ACCOUNTING Reload Steps
        - Step 1: Inserts new HRM-owned streets
        - Step 2: Stamps retired streets with DATE_RET, DATE_REV, OLD_FDMID
        - Step 3: Updates geometry lengths, SHORT_DESC, LONG_DESC on changed segments
-
+       - Step 4: Validation checks.
+       - Step 5: Incomplete, done with SQL.
+       
 3. Review QA flags before loading to asset accounting:
        - Records with blank SHORT_DESC or LONG_DESC
        - Records with blank DATE_REV
