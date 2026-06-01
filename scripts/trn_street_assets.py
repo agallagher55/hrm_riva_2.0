@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 
 from gispy import utils
+
 from event_updates import update_riva_from_event_table
 
 # Settings
@@ -234,7 +235,6 @@ def step_two_update_retired_streets(new_riva_streets):
         fdmid, to_date, old_fdmid, shape_length, route_id = row
 
         if fdmid in riva_retired_fdmids and fdmid not in retired_data:
-            
             retired_data[fdmid] = {
                 'date_ret': to_date,
                 'old_fdmid': old_fdmid,
@@ -251,14 +251,13 @@ def step_two_update_retired_streets(new_riva_streets):
             fdmid = row[0]
 
             if fdmid in retired_data:
-                
                 data = retired_data[fdmid]
                 row[1] = data['date_ret']
                 row[2] = datetime.today()
                 row[3] = data['old_fdmid']
                 row[4] = data['shape_length']
                 row[5] = data['date_act']
-                
+
                 cursor.updateRow(row)
                 print(f"\tUpdated FDMID: {fdmid}")
 
@@ -440,18 +439,19 @@ if __name__ == "__main__":
     step_three_updating_existing_riva_streets(new_riva_streets)
 
     # STEP 3b: Populate event-table attributes not carried by TRNLRS_TRN_STREET_VW
-    # update_riva_from_event_table(
-    #     riva_fc=new_riva_streets,
-    #     event_table=E_WIDTH,
-    #     event_field="Width",
-    #     target_field="PAVE_WIDTH",
-    #     segmented_table=TRNLRS_SEGMENTED,
-    # )
+    update_riva_from_event_table(
+        riva_fc=new_riva_streets,
+        event_table=E_WIDTH,
+        event_field="Width",
+        target_field="PAVE_WIDTH",
+        segmented_table=TRNLRS_SEGMENTED,
+    )
 
     # STEP 4
     step_four_validation_review(local_workspace, new_riva_streets)
 
     # input("Truncate and load RW")
+    # TODO: Not yet complete - done through sql scripts
     step_five_truncate_load_asset_accounting(source_riva=new_riva_streets)
 
     # Truncate and load RO
