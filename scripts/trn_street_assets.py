@@ -452,6 +452,6 @@ if __name__ == "__main__":
 
     # input("Truncate and load RW")
     # TODO: Not yet complete - done through sql scripts
-    step_five_truncate_load_asset_accounting(source_riva=new_riva_streets)
+    # step_five_truncate_load_asset_accounting(source_riva=new_riva_streets)
 
     # Truncate and load RO
