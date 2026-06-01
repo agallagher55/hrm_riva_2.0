@@ -170,6 +170,13 @@ def step_one_new_hrm_streets(local_gdb: str):
             fm.addInputField(tbl_new_streets_for_riva, field.name)
             field_mappings.replaceFieldMap(idx, fm)
 
+        # GlobalID and OBJECTID are geodatabase-managed — must not be in the
+        # mappings or Append writes {00000000-…} zeros instead of auto-assigning.
+        for _managed in ("GlobalID", "OBJECTID"):
+            _idx = field_mappings.findFieldMapIndex(_managed)
+            if _idx != -1:
+                field_mappings.removeFieldMap(_idx)
+
         print(f"\nAppending new streets into RIVA table...")
         arcpy.Append_management(
             inputs=tbl_new_streets_for_riva,
